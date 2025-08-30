@@ -35,8 +35,8 @@
         "TypeScript type generation",
         "Edge Functions management"
       ],
-      "status": "ready",
-      "installed": true,
+      "status": "not-installed",
+      "installed": false,
       "built": true
     },
     "everything": {
@@ -60,6 +60,40 @@
         "Progress notifications",
         "Sampling integration",
         "Multi-modal content"
+      ],
+      "status": "ready",
+      "installed": true,
+      "built": true
+    },
+    "pg_tools": {
+      "name": "PostgreSQL Tools Server",
+      "description": "Direct PostgreSQL database operations with full SQL support",
+      "path": "./servers/pg_tools",
+      "type": "python",
+      "monorepo": false,
+      "packageManager": "pip",
+      "commands": {
+        "install": "uv pip install -e .",
+        "build": "none",
+        "start": "python -m mcp_server_pg.server",
+        "test": "python -m mcp_server_pg.server"
+      },
+      "requiredEnv": {
+        "DATABASE_URL": {
+          "description": "PostgreSQL connection string (postgresql://user:password@host:port/database)",
+          "sensitive": true,
+          "required": true
+        }
+      },
+      "optionalArgs": [],
+      "features": [
+        "Execute SQL queries",
+        "List database tables",
+        "Describe table schemas",
+        "Get table constraints",
+        "Get table indexes",
+        "Database size info",
+        "Table size analysis"
       ],
       "status": "ready",
       "installed": true,

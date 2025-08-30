@@ -131,7 +131,14 @@ const quickLaunch = async (serverName) => {
       console.log('  2. Server dependencies installed and built');
       console.log('  3. Test manually with:');
       console.log(chalk.cyan(`     cd mcp-hub/servers/${serverName}`));
-      console.log(chalk.cyan(`     echo '{"jsonrpc":"2.0","method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"test","version":"1.0.0"}},"id":1}' | node ${manager.getServer(serverName).commands.start.split(' ').slice(1).join(' ')}`));
+      
+      // Show correct test command based on server type
+      const server = manager.getServer(serverName);
+      if (server.type === 'python') {
+        console.log(chalk.cyan(`     echo '{"jsonrpc":"2.0","method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"test","version":"1.0.0"}},"id":1}' | ${server.commands.start}`));
+      } else {
+        console.log(chalk.cyan(`     echo '{"jsonrpc":"2.0","method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"test","version":"1.0.0"}},"id":1}' | node ${server.commands.start.split(' ').slice(1).join(' ')}`));
+      }
       
       const { continueAnyway } = await inquirer.prompt([{
         type: 'confirm',

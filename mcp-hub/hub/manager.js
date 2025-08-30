@@ -86,8 +86,35 @@ export class MCPHubManager {
     if (!server) throw new Error(`Server ${serverName} not found`);
 
     const serverPath = path.join(this.hubRoot, server.path);
+    
+    // For Python servers, check if .venv exists in server directory
+    if (server.type === 'python') {
+      const venvPath = path.join(serverPath, '.venv');
+      try {
+        await fs.access(venvPath);
+        server.installed = true;
+        return true;
+      } catch {
+        server.installed = false;
+        return false;
+      }
+    }
+    
+    // For Supabase monorepo, check if key dependency exists
+    if (serverName === 'supabase') {
+      const sdkPath = path.join(serverPath, 'node_modules', '@modelcontextprotocol', 'sdk');
+      try {
+        await fs.access(sdkPath);
+        server.installed = true;
+        return true;
+      } catch {
+        server.installed = false;
+        return false;
+      }
+    }
+    
+    // For other Node.js servers, check for node_modules
     const nodeModulesPath = path.join(serverPath, 'node_modules');
-
     try {
       await fs.access(nodeModulesPath);
       server.installed = true;
@@ -106,6 +133,12 @@ export class MCPHubManager {
     if (!server) throw new Error(`Server ${serverName} not found`);
 
     const serverPath = path.join(this.hubRoot, server.path);
+    
+    // Python servers don't need building
+    if (server.type === 'python') {
+      server.built = true;
+      return true;
+    }
     
     // For everything server, check dist folder
     if (serverName === 'everything') {
@@ -148,9 +181,47 @@ export class MCPHubManager {
     if (onProgress) onProgress(`Installing dependencies for ${server.name}...`);
 
     try {
-      const { stdout, stderr } = await execAsync(server.commands.install, {
+      // Python servers use UV to install dependencies in their own venv
+      if (server.type === 'python') {
+        if (onProgress) onProgress(`Installing Python dependencies with UV for ${server.name}...`);
+        
+        try {
+          // UV creates and manages venv automatically
+          const uvCommand = process.platform === 'win32'
+            ? `"${process.env.USERPROFILE}\\.local\\bin\\uv.exe" pip install -e .`
+            : 'uv pip install -e .';
+          
+          const { stdout, stderr } = await execAsync(uvCommand, {
+            cwd: serverPath,
+            env: { ...process.env },
+            maxBuffer: 1024 * 1024 * 10
+          });
+          
+          server.installed = true;
+          await this.saveRegistry();
+          if (onProgress) onProgress(`✅ Python dependencies installed for ${server.name}`);
+          return { success: true, output: stdout };
+        } catch (error) {
+          if (onProgress) onProgress(`❌ Failed to install ${server.name}: ${error.message}`);
+          throw error;
+        }
+      }
+      
+      // For monorepo servers (like Supabase), pnpm needs special handling
+      let installCommand = server.commands.install;
+      let installEnv = { ...process.env, CI: 'true' };
+      
+      if (server.monorepo && server.packageManager === 'pnpm') {
+        // For pnpm monorepos, we need to ensure all workspace dependencies are installed
+        installCommand = 'pnpm install --frozen-lockfile';
+        // Remove CI flag for pnpm as it can cause issues
+        installEnv = { ...process.env };
+      }
+
+      const { stdout, stderr } = await execAsync(installCommand, {
         cwd: serverPath,
-        env: { ...process.env, CI: 'true' }
+        env: installEnv,
+        maxBuffer: 1024 * 1024 * 10 // 10MB buffer for large installs
       });
 
       server.installed = true;
@@ -176,8 +247,18 @@ export class MCPHubManager {
     if (onProgress) onProgress(`Building ${server.name}...`);
 
     try {
+      // Some servers might not have a build step
+      if (!server.commands.build || server.commands.build === 'none') {
+        if (onProgress) onProgress(`ℹ️ No build step required for ${server.name}`);
+        server.built = true;
+        await this.saveRegistry();
+        return { success: true, output: 'No build required' };
+      }
+
       const { stdout, stderr } = await execAsync(server.commands.build, {
-        cwd: serverPath
+        cwd: serverPath,
+        env: { ...process.env },
+        maxBuffer: 1024 * 1024 * 10 // 10MB buffer for large builds
       });
 
       server.built = true;
@@ -199,44 +280,66 @@ export class MCPHubManager {
     if (!server) throw new Error(`Server ${serverName} not found`);
 
     const serverPath = path.join(this.hubRoot, server.path);
-    const startCommand = server.commands.start.split(' ');
-    const command = startCommand[0];
-    let args = startCommand.slice(1);
+    
+    let command, args;
+    const isWindows = process.platform === 'win32';
+    
+    // Handle Python servers - use UV
+    if (server.type === 'python') {
+      if (isWindows) {
+        const homeDir = process.env.USERPROFILE || process.env.HOME;
+        command = path.join(homeDir, '.local', 'bin', 'uv.exe');
+        command = command.replace(/\//g, '\\');
+        
+        const moduleParts = server.commands.start.split(' ');
+        args = [
+          '--directory',
+          serverPath.replace(/\//g, '\\'),
+          'run',
+          ...moduleParts
+        ];
+      } else {
+        command = 'uv';
+        const moduleParts = server.commands.start.split(' ');
+        args = [
+          '--directory',
+          serverPath,
+          'run',
+          ...moduleParts
+        ];
+      }
+    } else {
+      // Handle Node.js servers
+      const startCommand = server.commands.start.split(' ');
+      command = startCommand[0];
+      args = startCommand.slice(1);
 
-    // For monorepo servers, keep paths relative to allow proper module resolution
-    // For non-monorepo servers, resolve to absolute paths
-    if (!server.monorepo && args[0] && !path.isAbsolute(args[0])) {
-      args[0] = path.join(serverPath, args[0]);
+      // For monorepo servers, keep paths relative to allow proper module resolution
+      // For non-monorepo servers, resolve to absolute paths
+      if (!server.monorepo && args[0] && !path.isAbsolute(args[0])) {
+        args[0] = path.join(serverPath, args[0]);
+      }
     }
 
-    // Special handling for Supabase server - pass CLI arguments
+    // For Supabase, pass project-ref as CLI arg but use env for token
     if (serverName === 'supabase') {
-      if (envVars.SUPABASE_ACCESS_TOKEN) {
-        args.push('--access-token', envVars.SUPABASE_ACCESS_TOKEN);
-      }
       if (envVars.SUPABASE_PROJECT_REF) {
         args.push('--project-ref', envVars.SUPABASE_PROJECT_REF);
       }
-    }
-
-    // Debug logging for Supabase
-    if (serverName === 'supabase') {
-      console.error('DEBUG: Testing Supabase with command:', command);
-      console.error('DEBUG: Args:', args);
-      console.error('DEBUG: CWD:', serverPath);
+      // Add read-only flag for safety
+      args.push('--read-only');
     }
 
     return new Promise((resolve, reject) => {
+      // Use shell on Windows for better compatibility
+      const isWindows = process.platform === 'win32';
       const child = spawn(command, args, {
         cwd: serverPath,
         env: { ...process.env, ...envVars },
         stdio: ['pipe', 'pipe', 'pipe'],
-        shell: false
+        shell: isWindows,
+        windowsHide: true
       });
-
-      if (serverName === 'supabase') {
-        console.error('DEBUG: Child process spawned, PID:', child.pid);
-      }
 
       let output = '';
       let errorOutput = '';
@@ -259,9 +362,6 @@ export class MCPHubManager {
 
       child.stdout.on('data', (data) => {
         output += data.toString();
-        if (serverName === 'supabase') {
-          console.error('DEBUG: Got stdout data:', data.toString());
-        }
         
         // Check for successful initialization
         if (output.includes('"id":1') && output.includes('"result"')) {
@@ -273,52 +373,29 @@ export class MCPHubManager {
 
       child.stderr.on('data', (data) => {
         errorOutput += data.toString();
-        if (serverName === 'supabase') {
-          console.error('DEBUG: Got stderr data:', data.toString());
-        }
       });
 
       child.on('error', (error) => {
         clearTimeout(timeout);
-        if (serverName === 'supabase') {
-          console.error('DEBUG: Process error:', error);
-        }
         reject({ success: false, message: error.message });
       });
 
-      child.on('exit', (code, signal) => {
-        if (serverName === 'supabase') {
-          console.error('DEBUG: Process exited with code:', code, 'signal:', signal);
-        }
-      });
-
-      // Send init immediately for Supabase, delay for others
-      if (serverName === 'supabase') {
-        // Supabase needs the init request immediately
-        console.error('DEBUG: Sending init request immediately');
+      // Send init request after a delay
+      setTimeout(() => {
         child.stdin.write(initRequest);
-      } else {
-        // Other servers may need a short delay
-        setTimeout(() => {
-          child.stdin.write(initRequest);
-        }, 500);
-      }
+        // Don't end stdin - MCP is a continuous protocol
+      }, 500);
 
-      // Timeout after 5 seconds
+      // Timeout after 10 seconds (Supabase needs time to connect to API)
       timeout = setTimeout(() => {
         child.kill();
-        // Debug output for Supabase
-        if (serverName === 'supabase' && (output || errorOutput)) {
-          console.error('DEBUG: Server output:', output);
-          console.error('DEBUG: Server errors:', errorOutput);
-        }
         resolve({ 
           success: false, 
-          message: 'Server did not respond within 5 seconds',
+          message: 'Server did not respond within 10 seconds',
           output,
           errorOutput
         });
-      }, 5000);
+      }, 10000);
     });
   }
 
@@ -330,42 +407,89 @@ export class MCPHubManager {
     if (!server) throw new Error(`Server ${serverName} not found`);
 
     const serverPath = path.resolve(this.hubRoot, server.path);
-    const startCommand = server.commands.start.split(' ');
-    const command = startCommand[0];
-    let args = startCommand.slice(1);
+    
+    // Detect Windows platform
+    const isWindows = process.platform === 'win32';
+    
+    let command, args;
+    
+    // Handle Python servers - use UV
+    if (server.type === 'python') {
+      if (isWindows) {
+        const homeDir = process.env.USERPROFILE || process.env.HOME;
+        command = path.join(homeDir, '.local', 'bin', 'uv.exe');
+        command = command.replace(/\//g, '\\');
+        
+        const moduleParts = server.commands.start.split(' ');
+        args = [
+          '--directory',
+          serverPath.replace(/\//g, '\\'),
+          'run',
+          ...moduleParts
+        ];
+      } else {
+        command = 'uv';
+        const moduleParts = server.commands.start.split(' ');
+        args = [
+          '--directory',
+          serverPath,
+          'run',
+          ...moduleParts
+        ];
+      }
+    } else {
+      // Handle Node.js servers
+      const startCommand = server.commands.start.split(' ');
+      command = startCommand[0];
+      args = startCommand.slice(1);
 
-    // For monorepo servers, keep paths relative and use serverPath as cwd
-    // For non-monorepo servers, resolve to absolute paths
-    if (!server.monorepo && args[0] && !path.isAbsolute(args[0])) {
-      args[0] = path.resolve(serverPath, args[0]);
+      // For Windows, use full path to node.exe
+      if (isWindows && command === 'node') {
+        command = 'C:\\Program Files\\nodejs\\node.exe';
+      }
+
+      // Always resolve script path to absolute path for Node.js servers
+      if (args[0] && !path.isAbsolute(args[0])) {
+        args[0] = path.resolve(serverPath, args[0]);
+      }
+      
+      // Convert paths to Windows format if on Windows
+      if (isWindows) {
+        // Convert forward slashes to backslashes for Windows
+        if (args[0]) {
+          args[0] = args[0].replace(/\//g, '\\');
+        }
+        command = command.replace(/\//g, '\\');
+      }
     }
 
-    // Special handling for Supabase server - pass CLI arguments
+    // For Supabase, pass project-ref as CLI arg but use env for token
     if (serverName === 'supabase') {
-      if (envVars.SUPABASE_ACCESS_TOKEN) {
-        args.push('--access-token', envVars.SUPABASE_ACCESS_TOKEN);
-      }
       if (envVars.SUPABASE_PROJECT_REF) {
         args.push('--project-ref', envVars.SUPABASE_PROJECT_REF);
       }
-    }
-
-    // Add optional arguments
-    if (options.readOnly && server.optionalArgs.includes('--read-only')) {
+      // Add read-only flag for safety
       args.push('--read-only');
     }
 
-    // Build config with cwd for monorepo servers
+    // Add optional arguments (but not for supabase which already has it)
+    if (options.readOnly && server.optionalArgs.includes('--read-only') && serverName !== 'supabase') {
+      args.push('--read-only');
+    }
+
+    // Build config
     const serverConfig = {
       command,
-      args,
-      env: envVars
+      args
     };
     
-    // Add cwd for monorepo servers to ensure proper module resolution
-    if (server.monorepo) {
-      serverConfig.cwd = serverPath;
+    // Add env vars if present
+    if (Object.keys(envVars).length > 0) {
+      serverConfig.env = envVars;
     }
+    
+    // Always add cwd for better reliability (convert to Windows format if needed)
+    serverConfig.cwd = isWindows ? serverPath.replace(/\//g, '\\') : serverPath;
     
     const config = {
       mcpServers: {

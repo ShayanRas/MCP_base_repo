@@ -1,7 +1,7 @@
 # MCP Hub - Multi-Server Management System
 
 ## Date
-2025-08-29
+2025-08-30 (Updated)
 
 ## Overview
 A centralized hub system for managing multiple Model Context Protocol (MCP) servers with Claude Desktop. This system allows easy installation, configuration, testing, and deployment of various MCP servers through a unified CLI interface.
@@ -509,6 +509,45 @@ server.onrequest = (request) => {
 };
 ```
 
+## What Changed on 2025-08-30
+
+### Problem Solved
+The Supabase MCP server wasn't working with Claude Desktop on Windows due to:
+1. Relative paths in the generated configuration
+2. Missing working directory (`cwd`) property
+3. Windows path format issues (forward slashes instead of backslashes)
+
+### Solution Implemented
+Updated `hub/manager.js` to:
+1. **Generate absolute paths** for all file references
+2. **Add `cwd` property** to all server configs for better reliability
+3. **Convert to Windows path format** with backslashes when on Windows
+4. **Use full path to node.exe** on Windows (`C:\Program Files\nodejs\node.exe`)
+5. **Handle monorepo installations** with proper pnpm commands
+
+### Key Code Changes
+The `generateConfig` method now:
+```javascript
+// Detect Windows and use absolute paths
+const isWindows = process.platform === 'win32';
+if (isWindows && command === 'node') {
+  command = 'C:\\Program Files\\nodejs\\node.exe';
+}
+
+// Always use absolute paths
+if (args[0] && !path.isAbsolute(args[0])) {
+  args[0] = path.resolve(serverPath, args[0]);
+}
+
+// Convert to Windows format
+if (isWindows) {
+  args[0] = args[0].replace(/\//g, '\\');
+}
+
+// Always add cwd for reliability
+serverConfig.cwd = isWindows ? serverPath.replace(/\//g, '\\') : serverPath;
+```
+
 ## How the Hub Works
 
 ### Core Components
@@ -577,12 +616,125 @@ The hub automatically detects your OS and Claude Desktop location:
 4. **Check logs** - Server errors appear in console output
 5. **Restart Claude Desktop** - Required after config changes
 
+## Windows-Specific Configuration (Updated 2025-08-30)
+
+### Critical Windows Path Requirements
+
+When configuring MCP servers for Claude Desktop on Windows, the generated configuration MUST use:
+
+1. **Absolute paths** - Claude Desktop runs from its own directory and won't find relative paths
+2. **Windows-style backslashes** - Use `\` not `/` in paths
+3. **Working directory (cwd)** - Essential for monorepo servers to resolve dependencies
+
+### Example Working Configuration
+
+```json
+{
+  "mcpServers": {
+    "supabase": {
+      "command": "C:\\Program Files\\nodejs\\node.exe",
+      "args": [
+        "C:\\Users\\Shayan\\Github_projects\\MCP_base_repo\\mcp-hub\\servers\\supabase\\packages\\mcp-server-supabase\\dist\\transports\\stdio.js",
+        "--project-ref",
+        "your-project-ref",
+        "--read-only"
+      ],
+      "cwd": "C:\\Users\\Shayan\\Github_projects\\MCP_base_repo\\mcp-hub\\servers\\supabase",
+      "env": {
+        "SUPABASE_ACCESS_TOKEN": "your-token"
+      }
+    }
+  }
+}
+```
+
+### Supabase Server Setup (Fixed 2025-08-30)
+
+The Supabase MCP server requires special handling as it's a pnpm monorepo:
+
+1. **Installation**:
+```powershell
+cd mcp-hub\servers\supabase
+Remove-Item -Recurse -Force node_modules  # Clean first if needed
+pnpm install
+pnpm build
+```
+
+2. **Testing**:
+```powershell
+$env:SUPABASE_ACCESS_TOKEN = "your-token"
+echo '{"jsonrpc":"2.0","method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"test","version":"1.0.0"}},"id":1}' | node packages\mcp-server-supabase\dist\transports\stdio.js --project-ref your-project-ref --read-only
+```
+
+3. **Hub Configuration Updates**:
+The hub now automatically:
+- Generates absolute Windows paths
+- Adds the `cwd` property for proper module resolution
+- Converts forward slashes to backslashes
+- Uses full path to `node.exe`
+
+### Adding New MCP Servers - Windows Guide
+
+When adding a new MCP server to the hub for Windows:
+
+1. **Update registry.json** with proper paths:
+```json
+{
+  "servers": {
+    "your-server": {
+      "name": "Your Server",
+      "description": "Description",
+      "path": "./servers/your-server",
+      "type": "node",
+      "monorepo": false,  // Set true if using workspaces
+      "packageManager": "npm",  // or "pnpm" for monorepos
+      "commands": {
+        "install": "npm install",
+        "build": "npm run build",
+        "start": "node dist/index.js"  // Relative to server path
+      },
+      "requiredEnv": {},
+      "optionalArgs": ["--read-only"]
+    }
+  }
+}
+```
+
+2. **For Monorepo Servers** (like Supabase):
+- Set `"monorepo": true` in registry
+- Use `pnpm install --frozen-lockfile` for installations
+- The hub will automatically set `cwd` in the config
+
+3. **Environment Variables**:
+- Store in `.env` file at hub root
+- Use namespaced variables (e.g., `SUPABASE_ACCESS_TOKEN`)
+- Hub loads these automatically
+
+### Common Windows Issues and Solutions
+
+1. **MODULE_NOT_FOUND Error**:
+   - **Cause**: Relative paths in config
+   - **Solution**: Hub now generates absolute paths automatically
+
+2. **Cannot find node_modules**:
+   - **Cause**: Missing `cwd` property for monorepos
+   - **Solution**: Hub now adds `cwd` automatically
+
+3. **EPIPE Error**:
+   - **Cause**: Server crashes on startup
+   - **Solution**: Check environment variables and paths
+
+4. **Test Fails but Server Works**:
+   - **Cause**: Windows stdio handling issues
+   - **Solution**: Type 'Y' to continue anyway when prompted
+
 ## Troubleshooting Checklist
 
 - [ ] Node.js version 18+ installed
 - [ ] Server builds successfully standalone
 - [ ] TypeScript configured for ES modules if needed
-- [ ] Start command path is absolute or relative to server root
+- [ ] Absolute paths used in configuration (Windows)
+- [ ] Working directory (cwd) set for monorepos
 - [ ] Environment variables are provided
 - [ ] Claude Desktop is fully closed before config update
 - [ ] Server responds to MCP initialize request
