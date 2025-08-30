@@ -1,0 +1,80 @@
+{
+  "servers": {
+    "supabase": {
+      "name": "Supabase MCP Server",
+      "description": "Connect to Supabase PostgreSQL databases with full CRUD operations",
+      "path": "./servers/supabase",
+      "type": "node",
+      "monorepo": true,
+      "packageManager": "pnpm",
+      "commands": {
+        "install": "pnpm install",
+        "build": "pnpm build",
+        "start": "node packages/mcp-server-supabase/dist/transports/stdio.js",
+        "test": "node test-connection.js"
+      },
+      "requiredEnv": {
+        "SUPABASE_ACCESS_TOKEN": {
+          "description": "Personal access token from Supabase Dashboard",
+          "sensitive": true,
+          "required": true
+        },
+        "SUPABASE_PROJECT_REF": {
+          "description": "Project reference ID from Supabase Dashboard",
+          "sensitive": false,
+          "required": true
+        }
+      },
+      "optionalArgs": [
+        "--read-only"
+      ],
+      "features": [
+        "SQL execution",
+        "Schema introspection",
+        "Migrations",
+        "TypeScript type generation",
+        "Edge Functions management"
+      ],
+      "status": "ready",
+      "installed": true,
+      "built": true
+    },
+    "everything": {
+      "name": "Everything Example Server",
+      "description": "MCP demo server showcasing all protocol features",
+      "path": "./servers/everything",
+      "type": "node",
+      "monorepo": false,
+      "packageManager": "npm",
+      "commands": {
+        "install": "npm install",
+        "build": "npm run build",
+        "start": "node dist/stdio.js"
+      },
+      "requiredEnv": {},
+      "optionalArgs": [],
+      "features": [
+        "Tools demonstration",
+        "Resources with pagination",
+        "Prompts with arguments",
+        "Progress notifications",
+        "Sampling integration",
+        "Multi-modal content"
+      ],
+      "status": "ready",
+      "installed": true,
+      "built": true
+    }
+  },
+  "config": {
+    "claudeDesktopPath": {
+      "windows": "%APPDATA%/Claude/claude_desktop_config.json",
+      "mac": "~/Library/Application Support/Claude/claude_desktop_config.json",
+      "linux": "~/.config/Claude/claude_desktop_config.json"
+    },
+    "defaultPackageManager": "npm",
+    "autoInstall": true,
+    "autoBuild": true,
+    "backupConfigs": true
+  }
+}
