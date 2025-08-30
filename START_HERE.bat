@@ -21,9 +21,21 @@ if not exist "mcp-hub\start_here.bat" (
 REM Navigate to mcp-hub and run the setup
 cd mcp-hub
 call start_here.bat
+set SETUP_RESULT=%errorlevel%
 cd ..
+
+if %SETUP_RESULT% neq 0 (
+    echo.
+    echo Setup failed. Please check the errors above.
+    pause
+    exit /b %SETUP_RESULT%
+)
 
 echo.
 echo Ready to use MCP Hub!
-echo Run 'cd mcp-hub && npm run mcp' to start the interactive menu.
 echo.
+echo To start the interactive menu:
+echo   PowerShell:  cd mcp-hub; npm run mcp
+echo   CMD:         cd mcp-hub ^&^& npm run mcp
+echo.
+pause

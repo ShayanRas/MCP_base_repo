@@ -14,7 +14,7 @@ echo.
 
 REM Check if Node.js is installed
 echo [1/6] Checking Node.js...
-node --version >nul 2>&1
+where node >nul 2>&1
 if errorlevel 1 (
     echo    X Node.js is not installed!
     echo    Please install Node.js 18+ from: https://nodejs.org/
@@ -22,15 +22,14 @@ if errorlevel 1 (
     pause
     exit /b 1
 ) else (
-    for /f "tokens=1" %%i in ('node --version') do set NODE_VER=%%i
-    echo    + Node.js !NODE_VER! found
+    echo    + Node.js found
 )
 
 REM Check if Python is installed
 echo [2/6] Checking Python...
-python --version >nul 2>&1
+where python >nul 2>&1
 if errorlevel 1 (
-    py --version >nul 2>&1
+    where py >nul 2>&1
     if errorlevel 1 (
         echo    X Python is not installed!
         echo    Please install Python 3.10+ from: https://www.python.org/downloads/
@@ -39,19 +38,17 @@ if errorlevel 1 (
         pause
         exit /b 1
     ) else (
-        for /f "tokens=2" %%i in ('py --version') do set PYTHON_VER=%%i
-        echo    + Python !PYTHON_VER! found ^(using py launcher^)
+        echo    + Python found ^(using py launcher^)
         set PYTHON_CMD=py
     )
 ) else (
-    for /f "tokens=2" %%i in ('python --version') do set PYTHON_VER=%%i
-    echo    + Python !PYTHON_VER! found
+    echo    + Python found
     set PYTHON_CMD=python
 )
 
 REM Check if Git is installed
 echo [3/6] Checking Git...
-git --version >nul 2>&1
+where git >nul 2>&1
 if errorlevel 1 (
     echo    X Git is not installed!
     echo    Please install Git from: https://git-scm.com/download/win
@@ -59,21 +56,19 @@ if errorlevel 1 (
     pause
     exit /b 1
 ) else (
-    for /f "tokens=3" %%i in ('git --version') do set GIT_VER=%%i
-    echo    + Git !GIT_VER! found
+    echo    + Git found
 )
 
 REM Check if npm is available
 echo [4/6] Checking npm...
-npm --version >nul 2>&1
+where npm >nul 2>&1
 if errorlevel 1 (
     echo    X npm is not available!
     echo    This should come with Node.js. Please reinstall Node.js.
     pause
     exit /b 1
 ) else (
-    for /f "tokens=1" %%i in ('npm --version') do set NPM_VER=%%i
-    echo    + npm !NPM_VER! found
+    echo    + npm found
 )
 
 REM Check/Install UV package manager

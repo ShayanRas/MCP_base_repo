@@ -3,6 +3,12 @@
 # ===============================================
 # MCP Base Repository - Quick Start for Unix/Mac
 # ===============================================
+# 
+# If you get "Permission denied", run:
+#   chmod +x START_HERE.sh
+# Then try again with:
+#   ./START_HERE.sh
+# ===============================================
 
 echo ""
 echo "========================================"
@@ -21,7 +27,14 @@ fi
 # Navigate to mcp-hub and run the setup
 cd mcp-hub
 bash start_here.sh
+SETUP_RESULT=$?
 cd ..
+
+if [ $SETUP_RESULT -ne 0 ]; then
+    echo ""
+    echo "Setup failed. Please check the errors above."
+    exit $SETUP_RESULT
+fi
 
 echo ""
 echo "Ready to use MCP Hub!"
