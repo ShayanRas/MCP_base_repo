@@ -140,16 +140,23 @@ After copying config, restart Claude Desktop to apply changes.
 - Check dependencies are installed: `npm run mcp` → Setup Server
 - Verify environment variables are correct
 - Check server logs in console output
+- **For monorepo servers**: See [MONOREPO_GUIDE.md](MONOREPO_GUIDE.md)
+
+### Module not found errors
+- **Monorepo servers** must run from workspace root directory
+- Check `monorepo: true` flag in registry.json
+- See [MONOREPO_GUIDE.md](MONOREPO_GUIDE.md) for details
 
 ### Config not working in Claude
 - Ensure Claude Desktop is completely restarted
 - Check config path is correct for your OS
-- Verify server path in config is absolute
+- Verify server path in config (absolute for regular, cwd for monorepo)
 
 ### Build failures
 - Check Node.js version (requires 18+)
 - Try cleaning and rebuilding
 - Check package manager (npm/pnpm) is correct
+- For pnpm workspaces, run `pnpm install` from root
 
 ## Development
 

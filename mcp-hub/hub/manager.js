@@ -3,6 +3,7 @@ import path from 'path';
 import { spawn, exec } from 'child_process';
 import { promisify } from 'util';
 import { fileURLToPath } from 'url';
+import dotenv from 'dotenv';
 
 const execAsync = promisify(exec);
 const __filename = fileURLToPath(import.meta.url);
@@ -14,6 +15,17 @@ export class MCPHubManager {
     this.hubRoot = path.resolve(__dirname, '..');
     this.configsDir = path.join(this.hubRoot, 'configs');
     this.registry = null;
+    
+    // Load environment variables from .env file
+    this.loadEnvironment();
+  }
+
+  /**
+   * Load environment variables from .env file
+   */
+  loadEnvironment() {
+    const envPath = path.join(this.hubRoot, '.env');
+    dotenv.config({ path: envPath });
   }
 
   /**
@@ -189,19 +201,42 @@ export class MCPHubManager {
     const serverPath = path.join(this.hubRoot, server.path);
     const startCommand = server.commands.start.split(' ');
     const command = startCommand[0];
-    const args = startCommand.slice(1);
+    let args = startCommand.slice(1);
 
-    // Resolve relative paths
-    if (args[0] && !path.isAbsolute(args[0])) {
+    // For monorepo servers, keep paths relative to allow proper module resolution
+    // For non-monorepo servers, resolve to absolute paths
+    if (!server.monorepo && args[0] && !path.isAbsolute(args[0])) {
       args[0] = path.join(serverPath, args[0]);
+    }
+
+    // Special handling for Supabase server - pass CLI arguments
+    if (serverName === 'supabase') {
+      if (envVars.SUPABASE_ACCESS_TOKEN) {
+        args.push('--access-token', envVars.SUPABASE_ACCESS_TOKEN);
+      }
+      if (envVars.SUPABASE_PROJECT_REF) {
+        args.push('--project-ref', envVars.SUPABASE_PROJECT_REF);
+      }
+    }
+
+    // Debug logging for Supabase
+    if (serverName === 'supabase') {
+      console.error('DEBUG: Testing Supabase with command:', command);
+      console.error('DEBUG: Args:', args);
+      console.error('DEBUG: CWD:', serverPath);
     }
 
     return new Promise((resolve, reject) => {
       const child = spawn(command, args, {
         cwd: serverPath,
         env: { ...process.env, ...envVars },
-        stdio: ['pipe', 'pipe', 'pipe']
+        stdio: ['pipe', 'pipe', 'pipe'],
+        shell: false
       });
+
+      if (serverName === 'supabase') {
+        console.error('DEBUG: Child process spawned, PID:', child.pid);
+      }
 
       let output = '';
       let errorOutput = '';
@@ -224,6 +259,9 @@ export class MCPHubManager {
 
       child.stdout.on('data', (data) => {
         output += data.toString();
+        if (serverName === 'supabase') {
+          console.error('DEBUG: Got stdout data:', data.toString());
+        }
         
         // Check for successful initialization
         if (output.includes('"id":1') && output.includes('"result"')) {
@@ -235,21 +273,45 @@ export class MCPHubManager {
 
       child.stderr.on('data', (data) => {
         errorOutput += data.toString();
+        if (serverName === 'supabase') {
+          console.error('DEBUG: Got stderr data:', data.toString());
+        }
       });
 
       child.on('error', (error) => {
         clearTimeout(timeout);
+        if (serverName === 'supabase') {
+          console.error('DEBUG: Process error:', error);
+        }
         reject({ success: false, message: error.message });
       });
 
-      // Send init after short delay
-      setTimeout(() => {
+      child.on('exit', (code, signal) => {
+        if (serverName === 'supabase') {
+          console.error('DEBUG: Process exited with code:', code, 'signal:', signal);
+        }
+      });
+
+      // Send init immediately for Supabase, delay for others
+      if (serverName === 'supabase') {
+        // Supabase needs the init request immediately
+        console.error('DEBUG: Sending init request immediately');
         child.stdin.write(initRequest);
-      }, 500);
+      } else {
+        // Other servers may need a short delay
+        setTimeout(() => {
+          child.stdin.write(initRequest);
+        }, 500);
+      }
 
       // Timeout after 5 seconds
       timeout = setTimeout(() => {
         child.kill();
+        // Debug output for Supabase
+        if (serverName === 'supabase' && (output || errorOutput)) {
+          console.error('DEBUG: Server output:', output);
+          console.error('DEBUG: Server errors:', errorOutput);
+        }
         resolve({ 
           success: false, 
           message: 'Server did not respond within 5 seconds',
@@ -272,9 +334,20 @@ export class MCPHubManager {
     const command = startCommand[0];
     let args = startCommand.slice(1);
 
-    // Resolve the script path to absolute
-    if (args[0] && !path.isAbsolute(args[0])) {
+    // For monorepo servers, keep paths relative and use serverPath as cwd
+    // For non-monorepo servers, resolve to absolute paths
+    if (!server.monorepo && args[0] && !path.isAbsolute(args[0])) {
       args[0] = path.resolve(serverPath, args[0]);
+    }
+
+    // Special handling for Supabase server - pass CLI arguments
+    if (serverName === 'supabase') {
+      if (envVars.SUPABASE_ACCESS_TOKEN) {
+        args.push('--access-token', envVars.SUPABASE_ACCESS_TOKEN);
+      }
+      if (envVars.SUPABASE_PROJECT_REF) {
+        args.push('--project-ref', envVars.SUPABASE_PROJECT_REF);
+      }
     }
 
     // Add optional arguments
@@ -282,13 +355,21 @@ export class MCPHubManager {
       args.push('--read-only');
     }
 
+    // Build config with cwd for monorepo servers
+    const serverConfig = {
+      command,
+      args,
+      env: envVars
+    };
+    
+    // Add cwd for monorepo servers to ensure proper module resolution
+    if (server.monorepo) {
+      serverConfig.cwd = serverPath;
+    }
+    
     const config = {
       mcpServers: {
-        [serverName]: {
-          command,
-          args,
-          env: envVars
-        }
+        [serverName]: serverConfig
       }
     };
 
@@ -411,5 +492,36 @@ export class MCPHubManager {
     }
 
     return await this.getServerStatus(serverName);
+  }
+
+  /**
+   * Get environment variables for a server, checking .env first
+   */
+  getEnvironmentVariables(serverName) {
+    const server = this.getServer(serverName);
+    if (!server) throw new Error(`Server ${serverName} not found`);
+
+    const envVars = {};
+    const missingVars = [];
+
+    // Check each required environment variable
+    for (const [key, config] of Object.entries(server.requiredEnv || {})) {
+      // Check if it exists in process.env (loaded from .env)
+      if (process.env[key]) {
+        envVars[key] = process.env[key];
+      } else if (config.required) {
+        missingVars.push({ key, config });
+      }
+    }
+
+    return { envVars, missingVars };
+  }
+
+  /**
+   * Check if all required environment variables are available
+   */
+  hasAllEnvironmentVariables(serverName) {
+    const { missingVars } = this.getEnvironmentVariables(serverName);
+    return missingVars.length === 0;
   }
 }

@@ -51,31 +51,50 @@ const showServerStatus = async (serverName) => {
 // Get environment variables
 const getEnvVars = async (serverName) => {
   const server = manager.getServer(serverName);
-  const envVars = {};
   
   if (!server.requiredEnv || Object.keys(server.requiredEnv).length === 0) {
-    return envVars;
+    return {};
   }
   
-  console.log(chalk.yellow('\n🔑 This server requires environment variables:'));
+  // Get environment variables from .env first
+  const { envVars, missingVars } = manager.getEnvironmentVariables(serverName);
   
-  const questions = [];
-  for (const [key, config] of Object.entries(server.requiredEnv)) {
-    questions.push({
-      type: config.sensitive ? 'password' : 'input',
-      name: key,
-      message: `${config.description} (${key}):`,
-      validate: (input) => {
-        if (config.required && !input) {
-          return `${key} is required`;
+  // Show which variables were loaded from .env
+  if (Object.keys(envVars).length > 0) {
+    console.log(chalk.green('\n✅ Loaded from .env:'));
+    for (const key of Object.keys(envVars)) {
+      const value = envVars[key];
+      const masked = key.includes('TOKEN') || key.includes('KEY') || key.includes('SECRET') 
+        ? value.substring(0, 6) + '***' 
+        : value;
+      console.log(chalk.gray(`   ${key}: ${masked}`));
+    }
+  }
+  
+  // Only prompt for missing required variables
+  if (missingVars.length > 0) {
+    console.log(chalk.yellow('\n🔑 Additional environment variables needed:'));
+    
+    const questions = [];
+    for (const { key, config } of missingVars) {
+      questions.push({
+        type: config.sensitive ? 'password' : 'input',
+        name: key,
+        message: `${config.description} (${key}):`,
+        validate: (input) => {
+          if (config.required && !input) {
+            return `${key} is required`;
+          }
+          return true;
         }
-        return true;
-      }
-    });
+      });
+    }
+    
+    const answers = await inquirer.prompt(questions);
+    Object.assign(envVars, answers);
   }
   
-  const answers = await inquirer.prompt(questions);
-  return answers;
+  return envVars;
 };
 
 // Quick launch server (direct mode)
