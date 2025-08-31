@@ -2,130 +2,107 @@ import os
 import sys
 import asyncio
 import logging
-from typing import Any, Dict, List, Optional
-import json
+from contextlib import asynccontextmanager
+from typing import Any, Dict, List, Optional, Union
+from urllib.parse import urlparse
 
-import psycopg
-from psycopg.rows import dict_row
-from psycopg_pool import AsyncConnectionPool
+import asyncpg
 from dotenv import load_dotenv
+from pydantic import AnyUrl
 
 from mcp.server import InitializationOptions
 from mcp.server.lowlevel import Server, NotificationOptions
 from mcp.server.stdio import stdio_server
 import mcp.types as types
 
-# Fix Windows compatibility for asyncio
-if sys.platform == "win32":
-    asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
-    # Reconfigure encoding for Windows
-    if os.environ.get('PYTHONIOENCODING') is None:
-        sys.stdin.reconfigure(encoding="utf-8")
-        sys.stdout.reconfigure(encoding="utf-8")
-        sys.stderr.reconfigure(encoding="utf-8")
+# reconfigure UnicodeEncodeError prone default (i.e. windows-1252) to utf-8
+if sys.platform == "win32" and os.environ.get('PYTHONIOENCODING') is None:
+    sys.stdin.reconfigure(encoding="utf-8")
+    sys.stdout.reconfigure(encoding="utf-8")
+    sys.stderr.reconfigure(encoding="utf-8")
 
 load_dotenv()
 
 logger = logging.getLogger('mcp_postgres_server')
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
-logger.info("Starting MCP Postgres Server (psycopg3)")
+logger.info("Starting MCP Postgres Server")
 
 
 class PostgresDatabase:
     def __init__(self, connection_string: str):
         """Initialize the PostgreSQL database connection."""
         self.connection_string = connection_string
-        self.pool: Optional[AsyncConnectionPool] = None
+        self.pool = None
+        # Don't call _init_database here, it will be called in main()
         
     async def _init_database(self):
         """Initialize the connection pool to the PostgreSQL database."""
         logger.debug("Initializing database connection pool")
         try:
-            # Parse the connection string to extract components
-            from urllib.parse import urlparse, unquote
-            
-            parsed = urlparse(self.connection_string)
-            
-            # Handle password - check if it's URL-encoded
-            password = parsed.password
-            if password and '%' in password:
-                # Password is URL-encoded, decode it
-                password = unquote(password)
-            
-            # Use connection parameters dictionary
-            # psycopg3 will handle escaping special characters properly
-            conn_params = {
-                "host": parsed.hostname,
-                "port": parsed.port or 5432,
-                "dbname": parsed.path[1:] if parsed.path else 'postgres',
-                "user": parsed.username,
-                "password": password
-            }
-            
-            logger.debug(f"Connecting to {conn_params['host']}:{conn_params['port']} as {conn_params['user']}")
-            
-            # Create pool with connection parameters
-            self.pool = AsyncConnectionPool(
-                kwargs=conn_params | {"row_factory": dict_row},  # Merge connection params with row_factory
-                min_size=1,
-                max_size=10,
-                timeout=10.0  # Reduce timeout from default 30s
-            )
-            await self.pool.open()
-            await self.pool.wait()  # Wait for pool to be ready
-            logger.info("Successfully connected to PostgreSQL database with psycopg3")
+            self.pool = await asyncpg.create_pool(self.connection_string)
+            logger.info("Successfully connected to PostgreSQL database")
         except Exception as e:
             logger.error(f"Error connecting to PostgreSQL database: {e}")
             raise
 
-    async def close(self):
-        """Close the connection pool."""
-        if self.pool:
-            await self.pool.close()
+    @asynccontextmanager
+    async def connection(self):
+        """Get a connection from the pool."""
+        if not self.pool:
+            await self._init_database()
+            
+        async with self.pool.acquire() as conn:
+            yield conn
 
     async def execute_query(self, query: str, params: List[Any] = None) -> List[Dict[str, Any]]:
         """Execute a SQL query and return results as a list of dictionaries."""
         logger.debug(f"Executing query: {query}")
-        
-        if not self.pool:
-            await self._init_database()
-            
         try:
-            async with self.pool.connection() as conn:
-                async with conn.cursor() as cursor:
-                    # Determine query type
-                    query_lines = query.strip().splitlines()
-                    first_executable_line = ""
-                    for line in query_lines:
-                        stripped_line = line.strip()
-                        if stripped_line and not stripped_line.startswith('--'):
-                            first_executable_line = stripped_line
-                            break
-                    
-                    if not first_executable_line:
-                        logger.warning("Query is empty or contains only comments.")
-                        return [{"error": "Query is empty or contains only comments."}]
-                    
+            async with self.connection() as conn:
+                # Determine if this is a read or write query
+                query_lines = query.strip().splitlines()
+                first_executable_line = ""
+                for line in query_lines:
+                    stripped_line = line.strip()
+                    if stripped_line and not stripped_line.startswith('--'):
+                        first_executable_line = stripped_line
+                        break
+                
+                query_type = ""
+                if first_executable_line:
+                    # Get the first word of the first non-comment line
                     query_type = first_executable_line.upper().split()[0]
-                    logger.debug(f"Detected query type: {query_type}")
+                else: # Query is empty or contains only comments
+                    logger.warning("Query is empty or contains only comments.")
+                    return [{"error": "Query is empty or contains only comments."}]
+                
+                logger.debug(f"Detected query type: {query_type}")
 
-                    # Execute query
-                    await cursor.execute(query, params or [])
+                if query_type in ('SELECT', 'SHOW', 'EXPLAIN', 'WITH'): 
+                    # Read query
+                    rows = await conn.fetch(query, *(params or []))
+                    results = [dict(row) for row in rows]
+                    logger.debug(f"Read query returned {len(results)} rows")
+                    return results
+                else:
+                    # Write query (INSERT, UPDATE, DELETE, CREATE, etc.)
+                    result_status_str = await conn.execute(query, *(params or []))
+                    logger.debug(f"Write query result: {result_status_str}")
                     
-                    if query_type in ('SELECT', 'SHOW', 'EXPLAIN', 'WITH'):
-                        # Read query - fetch results
-                        results = await cursor.fetchall()
-                        logger.debug(f"Read query returned {len(results)} rows")
-                        return results if results else []
-                    else:
-                        # Write query - commit is automatic with context manager
-                        affected_rows = cursor.rowcount
-                        status = cursor.statusmessage
-                        logger.debug(f"Write query result: {status}, affected rows: {affected_rows}")
-                        return [{"affected_rows": affected_rows, "command": status}]
-                        
+                    # Improved parsing of the command tag to get affected rows
+                    affected_rows = 0
+                    if result_status_str: # e.g., "INSERT 0 1", "UPDATE 5", "SELECT 1"
+                        parts = result_status_str.split(' ')
+                        if parts and parts[-1].isdigit():
+                            affected_rows = int(parts[-1])
+                        # Fallback for command tags like "CREATE TABLE" which don't have a row count
+                        elif not parts[-1].isdigit() and len(parts) > 0:
+                             pass # affected_rows remains 0, command is the status itself
+
+                    return [{"affected_rows": affected_rows, "command": result_status_str}]
         except Exception as e:
             logger.error(f"Database error executing query: {e}")
+            # Return the error as part of the result instead of raising
             return [{"error": str(e)}]
 
     async def list_tables(self) -> List[Dict[str, Any]]:
@@ -150,7 +127,7 @@ class PostgresDatabase:
             information_schema.columns
         WHERE 
             table_schema = 'public' AND 
-            table_name = %s
+            table_name = $1
         ORDER BY 
             ordinal_position;
         """
@@ -177,7 +154,7 @@ class PostgresDatabase:
             AND ccu.table_schema = tc.table_schema
         WHERE
             tc.table_schema = 'public' AND
-            tc.table_name = %s
+            tc.table_name = $1
         ORDER BY
             tc.constraint_name,
             kcu.column_name;
@@ -201,7 +178,7 @@ class PostgresDatabase:
         JOIN
             pg_attribute a ON a.attrelid = t.oid AND a.attnum = ANY(ix.indkey)
         WHERE
-            t.relname = %s
+            t.relname = $1
         ORDER BY
             i.relname,
             a.attname;
@@ -238,7 +215,7 @@ class PostgresDatabase:
 
 
 async def main():
-    logger.info("Starting Postgres MCP Server with psycopg3")
+    logger.info("Starting Postgres MCP Server")
     
     # Get the connection string from environment variables
     connection_string = os.getenv("DATABASE_URL")
@@ -248,7 +225,7 @@ async def main():
     
     # Create the database instance
     db = PostgresDatabase(connection_string)
-    await db._init_database()  # Initialize the pool
+    await db._init_database()  # Ensure the pool is initialized
     
     # Create the MCP server
     server = Server("postgres-manager")
@@ -343,41 +320,40 @@ async def main():
                 
                 params = arguments.get("params", [])
                 results = await db.execute_query(arguments["query"], params)
-                # Use json.dumps with default=str to handle any non-serializable types
-                return [types.TextContent(type="text", text=json.dumps(results, indent=2, default=str))]
+                return [types.TextContent(type="text", text=str(results))]
             
             elif name == "list_tables":
                 results = await db.list_tables()
-                return [types.TextContent(type="text", text=json.dumps(results, indent=2, default=str))]
+                return [types.TextContent(type="text", text=str(results))]
             
             elif name == "describe_table":
                 if not arguments or "table_name" not in arguments:
                     raise ValueError("Missing table_name argument")
                 
                 results = await db.describe_table(arguments["table_name"])
-                return [types.TextContent(type="text", text=json.dumps(results, indent=2, default=str))]
+                return [types.TextContent(type="text", text=str(results))]
             
             elif name == "get_table_constraints":
                 if not arguments or "table_name" not in arguments:
                     raise ValueError("Missing table_name argument")
                 
                 results = await db.get_table_constraints(arguments["table_name"])
-                return [types.TextContent(type="text", text=json.dumps(results, indent=2, default=str))]
+                return [types.TextContent(type="text", text=str(results))]
             
             elif name == "get_table_indexes":
                 if not arguments or "table_name" not in arguments:
                     raise ValueError("Missing table_name argument")
                 
                 results = await db.get_table_indexes(arguments["table_name"])
-                return [types.TextContent(type="text", text=json.dumps(results, indent=2, default=str))]
+                return [types.TextContent(type="text", text=str(results))]
             
             elif name == "get_database_size":
                 results = await db.get_database_size()
-                return [types.TextContent(type="text", text=json.dumps(results, indent=2, default=str))]
+                return [types.TextContent(type="text", text=str(results))]
             
             elif name == "get_table_sizes":
                 results = await db.get_table_sizes()
-                return [types.TextContent(type="text", text=json.dumps(results, indent=2, default=str))]
+                return [types.TextContent(type="text", text=str(results))]
             
             else:
                 raise ValueError(f"Unknown tool: {name}")
@@ -386,24 +362,20 @@ async def main():
             logger.error(f"Error handling tool call: {e}")
             return [types.TextContent(type="text", text=f"Error: {str(e)}")]
     
-    try:
-        async with stdio_server() as (read_stream, write_stream):
-            logger.info("Server running with stdio transport")
-            await server.run(
-                read_stream,
-                write_stream,
-                InitializationOptions(
-                    server_name="postgres",
-                    server_version="0.2.0",
-                    capabilities=server.get_capabilities(
-                        notification_options=NotificationOptions(),
-                        experimental_capabilities={},
-                    ),
+    async with stdio_server() as (read_stream, write_stream):
+        logger.info("Server running with stdio transport")
+        await server.run(
+            read_stream,
+            write_stream,
+            InitializationOptions(
+                server_name="postgres",
+                server_version="0.1.0",
+                capabilities=server.get_capabilities(
+                    notification_options=NotificationOptions(),
+                    experimental_capabilities={},
                 ),
-            )
-    finally:
-        # Clean up the database connection
-        await db.close()
+            ),
+        )
 
 
 class ServerWrapper:

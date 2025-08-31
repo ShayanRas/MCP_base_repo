@@ -773,3 +773,4 @@ npm run mcp  # Then select "List All Servers"
 - `Reference/MCP Server Examples/everything/` - Complete example server
 
 This hub system makes it easy to manage multiple MCP servers, test them locally, and deploy to Claude Desktop with a consistent workflow.
+- Always use most up to date and proper official best practices for implementations, including psycog3.

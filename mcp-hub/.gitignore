@@ -1,0 +1,59 @@
+# MCP Hub .gitignore
+
+# Logs
+*.log
+logs/
+npm-debug.log*
+
+# Dependencies
+node_modules/
+.pnpm-store/
+
+# Python virtual environments
+.venv/
+venv/
+env/
+ENV/
+*.pyc
+__pycache__/
+*.egg-info/
+.Python
+
+# Build outputs
+dist/
+build/
+*.build/
+out/
+
+# Environment files (keep .env.example)
+.env
+.env.local
+.env.*.local
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Test coverage
+coverage/
+.nyc_output/
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+
+# Claude Desktop configs (user-specific)
+configs/*.json
+!configs/.gitkeep
+
+# Setup logs
+mcp_hub_setup.log
+
+# OS files
+Thumbs.db
+Desktop.ini

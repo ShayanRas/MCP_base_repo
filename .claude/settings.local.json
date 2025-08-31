@@ -1,7 +1,10 @@
 {
   "permissions": {
     "allow": [
-      "WebFetch(domain:supabase.com)"
+      "WebFetch(domain:supabase.com)",
+      "Bash(~/.local/bin/uv pip list:*)",
+      "Bash(cat:*)",
+      "WebFetch(domain:pypi.org)"
     ],
     "deny": [],
     "ask": []

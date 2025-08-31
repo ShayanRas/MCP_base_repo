@@ -186,7 +186,25 @@ export class MCPHubManager {
         if (onProgress) onProgress(`Installing Python dependencies with UV for ${server.name}...`);
         
         try {
-          // UV creates and manages venv automatically
+          // First, ensure venv exists (UV needs to create it with proper platform)
+          const venvPath = path.join(serverPath, '.venv');
+          const venvExists = await fs.access(venvPath).then(() => true).catch(() => false);
+          
+          if (!venvExists) {
+            if (onProgress) onProgress(`Creating Python virtual environment...`);
+            const createVenvCmd = process.platform === 'win32'
+              ? `"${process.env.USERPROFILE}\\.local\\bin\\uv.exe" venv`
+              : 'uv venv';
+            
+            await execAsync(createVenvCmd, {
+              cwd: serverPath,
+              env: { ...process.env },
+              maxBuffer: 1024 * 1024 * 10
+            });
+          }
+          
+          // Now install the package in editable mode
+          if (onProgress) onProgress(`Installing package dependencies...`);
           const uvCommand = process.platform === 'win32'
             ? `"${process.env.USERPROFILE}\\.local\\bin\\uv.exe" pip install -e .`
             : 'uv pip install -e .';
@@ -196,6 +214,21 @@ export class MCPHubManager {
             env: { ...process.env },
             maxBuffer: 1024 * 1024 * 10
           });
+          
+          // Verify the package is actually installed
+          if (onProgress) onProgress(`Verifying installation...`);
+          const pythonPath = process.platform === 'win32'
+            ? path.join(serverPath, '.venv', 'Scripts', 'python.exe')
+            : path.join(serverPath, '.venv', 'bin', 'python');
+          
+          const verifyCmd = `"${pythonPath}" -c "import mcp_server_pg.server"`;
+          try {
+            await execAsync(verifyCmd, { cwd: serverPath });
+            if (onProgress) onProgress(`✅ Package verified successfully`);
+          } catch (verifyError) {
+            console.error('Package verification failed:', verifyError.message);
+            throw new Error('Package installed but module cannot be imported. Check pyproject.toml configuration.');
+          }
           
           server.installed = true;
           await this.saveRegistry();
@@ -284,30 +317,36 @@ export class MCPHubManager {
     let command, args;
     const isWindows = process.platform === 'win32';
     
-    // Handle Python servers - use UV
+    // Handle Python servers - use venv Python directly for testing
     if (server.type === 'python') {
+      // For testing, use the venv Python directly (more reliable than UV for stdio)
       if (isWindows) {
-        const homeDir = process.env.USERPROFILE || process.env.HOME;
-        command = path.join(homeDir, '.local', 'bin', 'uv.exe');
-        command = command.replace(/\//g, '\\');
-        
-        const moduleParts = server.commands.start.split(' ');
-        args = [
-          '--directory',
-          serverPath.replace(/\//g, '\\'),
-          'run',
-          ...moduleParts
-        ];
+        command = path.join(serverPath, '.venv', 'Scripts', 'python.exe');
       } else {
-        command = 'uv';
-        const moduleParts = server.commands.start.split(' ');
-        args = [
-          '--directory',
-          serverPath,
-          'run',
-          ...moduleParts
-        ];
+        command = path.join(serverPath, '.venv', 'bin', 'python');
       }
+      
+      // Check if venv exists
+      try {
+        await fs.access(command);
+      } catch {
+        console.error(`Python venv not found at ${command}`);
+        console.error(`Please run: cd ${serverPath} && uv pip install -e .`);
+        throw new Error(`Python environment not set up for ${serverName}`);
+      }
+      
+      // Parse module from start command (e.g., "python -m mcp_server_pg.server")
+      const moduleParts = server.commands.start.split(' ');
+      const moduleIndex = moduleParts.indexOf('-m');
+      if (moduleIndex !== -1 && moduleParts[moduleIndex + 1]) {
+        args = ['-m', moduleParts[moduleIndex + 1]];
+      } else {
+        // Fallback to full command
+        args = moduleParts.slice(1);
+      }
+      
+      // Log for debugging
+      console.log(`Testing Python server with: ${command} ${args.join(' ')}`);
     } else {
       // Handle Node.js servers
       const startCommand = server.commands.start.split(' ');
@@ -331,13 +370,14 @@ export class MCPHubManager {
     }
 
     return new Promise((resolve, reject) => {
-      // Use shell on Windows for better compatibility
-      const isWindows = process.platform === 'win32';
+      // Only use shell for Node.js servers on Windows, not Python
+      const useShell = isWindows && server.type !== 'python';
+      
       const child = spawn(command, args, {
         cwd: serverPath,
         env: { ...process.env, ...envVars },
         stdio: ['pipe', 'pipe', 'pipe'],
-        shell: isWindows,
+        shell: useShell,
         windowsHide: true
       });
 
@@ -373,10 +413,15 @@ export class MCPHubManager {
 
       child.stderr.on('data', (data) => {
         errorOutput += data.toString();
+        // Log Python import errors immediately
+        if (server.type === 'python' && errorOutput.includes('ModuleNotFoundError')) {
+          console.error('Python module error:', errorOutput);
+        }
       });
 
       child.on('error', (error) => {
         clearTimeout(timeout);
+        console.error(`Failed to spawn ${command}:`, error.message);
         reject({ success: false, message: error.message });
       });
 
