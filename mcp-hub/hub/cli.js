@@ -188,6 +188,180 @@ const quickLaunch = async (serverName) => {
   }
 };
 
+// View Claude Desktop servers
+const viewClaudeServers = async () => {
+  const spinner = ora('Reading Claude Desktop configuration...').start();
+  
+  try {
+    const servers = await manager.getExistingServers();
+    spinner.stop();
+    
+    if (servers.length === 0) {
+      console.log(chalk.yellow('\n📭 No MCP servers configured in Claude Desktop'));
+      return;
+    }
+    
+    console.log(chalk.bold('\n🔍 Claude Desktop MCP Servers:\n'));
+    
+    for (const server of servers) {
+      // Color based on whether it's managed by this hub
+      const nameColor = server.inRegistry ? chalk.green : chalk.cyan;
+      const typeLabel = server.inRegistry ? ' (Hub Managed)' : ' (External)';
+      
+      console.log(nameColor(`📦 ${server.name}${typeLabel}`));
+      console.log(chalk.gray(`   Command: ${server.command}`));
+      
+      if (server.args && server.args.length > 0) {
+        const argsDisplay = server.args.length > 3 
+          ? `${server.args.slice(0, 3).join(' ')}...` 
+          : server.args.join(' ');
+        console.log(chalk.gray(`   Args: ${argsDisplay}`));
+      }
+      
+      if (server.cwd) {
+        console.log(chalk.gray(`   Working Dir: ${server.cwd}`));
+      }
+      
+      if (Object.keys(server.env).length > 0) {
+        const envKeys = Object.keys(server.env);
+        const envDisplay = envKeys.map(k => {
+          const value = server.env[k];
+          // Mask sensitive values
+          const masked = k.includes('TOKEN') || k.includes('KEY') || k.includes('SECRET')
+            ? '***' 
+            : value.substring(0, 20) + (value.length > 20 ? '...' : '');
+          return `${k}=${masked}`;
+        }).join(', ');
+        console.log(chalk.gray(`   Env: ${envDisplay}`));
+      }
+      
+      if (server.registryDetails) {
+        console.log(chalk.gray(`   Type: ${server.registryDetails.type}`));
+        console.log(chalk.gray(`   Description: ${server.registryDetails.description}`));
+      }
+      
+      console.log('');
+    }
+    
+    console.log(chalk.gray(`Total: ${servers.length} server(s) configured`));
+    
+  } catch (error) {
+    spinner.fail(`Failed to read Claude config: ${error.message}`);
+  }
+};
+
+// Manage Claude Desktop servers (remove unwanted ones)
+const manageClaudeServers = async () => {
+  const spinner = ora('Reading Claude Desktop configuration...').start();
+  
+  try {
+    const servers = await manager.getExistingServers();
+    spinner.stop();
+    
+    if (servers.length === 0) {
+      console.log(chalk.yellow('\n📭 No MCP servers to manage in Claude Desktop'));
+      return;
+    }
+    
+    // Create choices for multi-select
+    const choices = servers.map(server => ({
+      name: `${server.name}${server.inRegistry ? ' (Hub)' : ' (External)'} - ${server.command}`,
+      value: server.name,
+      checked: false
+    }));
+    
+    const { action } = await inquirer.prompt([{
+      type: 'list',
+      name: 'action',
+      message: 'What would you like to do?',
+      choices: [
+        { name: '🗑️ Remove selected servers', value: 'remove' },
+        { name: '🧹 Remove all servers', value: 'remove-all' },
+        { name: '⬅️ Back to main menu', value: 'back' }
+      ]
+    }]);
+    
+    if (action === 'back') {
+      return;
+    }
+    
+    let serversToRemove = [];
+    
+    if (action === 'remove-all') {
+      const { confirm } = await inquirer.prompt([{
+        type: 'confirm',
+        name: 'confirm',
+        message: chalk.red(`Are you sure you want to remove ALL ${servers.length} server(s) from Claude Desktop?`),
+        default: false
+      }]);
+      
+      if (!confirm) {
+        console.log(chalk.yellow('✋ Operation cancelled'));
+        return;
+      }
+      
+      serversToRemove = servers.map(s => s.name);
+    } else {
+      // Select specific servers to remove
+      const { selected } = await inquirer.prompt([{
+        type: 'checkbox',
+        name: 'selected',
+        message: 'Select servers to remove:',
+        choices,
+        validate: (input) => {
+          if (input.length === 0) {
+            return 'Please select at least one server to remove';
+          }
+          return true;
+        }
+      }]);
+      
+      if (selected.length === 0) {
+        return;
+      }
+      
+      // Confirm removal
+      const { confirm } = await inquirer.prompt([{
+        type: 'confirm',
+        name: 'confirm',
+        message: `Remove ${selected.length} server(s) from Claude Desktop?`,
+        default: true
+      }]);
+      
+      if (!confirm) {
+        console.log(chalk.yellow('✋ Operation cancelled'));
+        return;
+      }
+      
+      serversToRemove = selected;
+    }
+    
+    // Remove the servers
+    const removeSpinner = ora('Removing servers from Claude Desktop...').start();
+    
+    try {
+      const result = await manager.removeServerFromConfig(serversToRemove);
+      removeSpinner.succeed(chalk.green(`✅ Removed ${result.removed.length} server(s)`));
+      
+      if (result.removed.length > 0) {
+        console.log(chalk.gray('\nRemoved servers:'));
+        result.removed.forEach(name => {
+          console.log(chalk.gray(`  - ${name}`));
+        });
+      }
+      
+      console.log(chalk.gray(`\nRemaining servers: ${result.remaining.length}`));
+      console.log(chalk.yellow('\n⚠️  Restart Claude Desktop to apply changes'));
+      
+    } catch (error) {
+      removeSpinner.fail(`Failed to remove servers: ${error.message}`);
+    }
+    
+  } catch (error) {
+    spinner.fail(`Failed to read Claude config: ${error.message}`);
+  }
+};
+
 // Interactive menu
 const interactiveMenu = async () => {
   const servers = manager.getServers();
@@ -203,6 +377,8 @@ const interactiveMenu = async () => {
       { name: '🔧 Generate Configuration', value: 'config' },
       { name: '✅ Test Server Connection', value: 'test' },
       { name: '📁 Copy Config to Claude Desktop', value: 'copy' },
+      { name: '🔍 View Claude Desktop Servers', value: 'view-claude' },
+      { name: '🗑️ Manage Claude Desktop Servers', value: 'manage-claude' },
       { name: '❌ Exit', value: 'exit' }
     ]
   }]);
@@ -218,6 +394,18 @@ const interactiveMenu = async () => {
       await showServerStatus(serverName);
     }
     console.log('');
+    return interactiveMenu();
+  }
+  
+  // Handle View Claude Desktop Servers
+  if (action === 'view-claude') {
+    await viewClaudeServers();
+    return interactiveMenu();
+  }
+  
+  // Handle Manage Claude Desktop Servers
+  if (action === 'manage-claude') {
+    await manageClaudeServers();
     return interactiveMenu();
   }
   

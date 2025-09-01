@@ -4,7 +4,8 @@
       "WebFetch(domain:supabase.com)",
       "Bash(~/.local/bin/uv pip list:*)",
       "Bash(cat:*)",
-      "WebFetch(domain:pypi.org)"
+      "WebFetch(domain:pypi.org)",
+      "WebSearch"
     ],
     "deny": [],
     "ask": []

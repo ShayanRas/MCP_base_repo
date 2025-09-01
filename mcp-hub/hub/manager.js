@@ -693,4 +693,119 @@ export class MCPHubManager {
     const { missingVars } = this.getEnvironmentVariables(serverName);
     return missingVars.length === 0;
   }
+
+  /**
+   * Read the current Claude Desktop configuration
+   */
+  async readClaudeConfig() {
+    const claudePath = this.getClaudeConfigPath();
+    
+    try {
+      const configData = await fs.readFile(claudePath, 'utf-8');
+      return JSON.parse(configData);
+    } catch (error) {
+      if (error.code === 'ENOENT') {
+        // Config doesn't exist, return empty config structure
+        return { mcpServers: {} };
+      }
+      throw new Error(`Failed to read Claude config: ${error.message}`);
+    }
+  }
+
+  /**
+   * Get list of existing servers from Claude Desktop config
+   */
+  async getExistingServers() {
+    const config = await this.readClaudeConfig();
+    const servers = [];
+    
+    if (config.mcpServers) {
+      for (const [name, serverConfig] of Object.entries(config.mcpServers)) {
+        // Check if this server is in our registry
+        const registryServer = this.registry?.servers?.[name];
+        
+        servers.push({
+          name,
+          command: serverConfig.command,
+          args: serverConfig.args || [],
+          env: serverConfig.env || {},
+          cwd: serverConfig.cwd,
+          inRegistry: !!registryServer,
+          registryDetails: registryServer ? {
+            description: registryServer.description,
+            type: registryServer.type
+          } : null
+        });
+      }
+    }
+    
+    return servers;
+  }
+
+  /**
+   * Remove servers from Claude Desktop configuration
+   */
+  async removeServerFromConfig(serverNames) {
+    // Ensure serverNames is an array
+    const namesToRemove = Array.isArray(serverNames) ? serverNames : [serverNames];
+    
+    // Read current config
+    const config = await this.readClaudeConfig();
+    
+    // Create backup before modification
+    const claudePath = this.getClaudeConfigPath();
+    if (Object.keys(config).length > 0) {
+      const backupPath = `${claudePath}.backup-${Date.now()}`;
+      await fs.writeFile(backupPath, JSON.stringify(config, null, 2), 'utf-8');
+    }
+    
+    // Remove specified servers
+    const removedServers = [];
+    if (config.mcpServers) {
+      for (const name of namesToRemove) {
+        if (config.mcpServers[name]) {
+          delete config.mcpServers[name];
+          removedServers.push(name);
+        }
+      }
+    }
+    
+    // Save updated config
+    await this.updateClaudeConfig(config);
+    
+    return {
+      removed: removedServers,
+      remaining: Object.keys(config.mcpServers || {})
+    };
+  }
+
+  /**
+   * Update Claude Desktop configuration
+   */
+  async updateClaudeConfig(config) {
+    const claudePath = this.getClaudeConfigPath();
+    
+    // Ensure directory exists
+    const claudeDir = path.dirname(claudePath);
+    try {
+      await fs.mkdir(claudeDir, { recursive: true });
+    } catch (error) {
+      // Directory might already exist
+    }
+    
+    // Validate config structure
+    if (!config || typeof config !== 'object') {
+      throw new Error('Invalid config structure');
+    }
+    
+    // Ensure mcpServers exists even if empty
+    if (!config.mcpServers) {
+      config.mcpServers = {};
+    }
+    
+    // Write the config
+    await fs.writeFile(claudePath, JSON.stringify(config, null, 2), 'utf-8');
+    
+    return { path: claudePath, serverCount: Object.keys(config.mcpServers).length };
+  }
 }
