@@ -16,6 +16,7 @@ You are provided with an optimized knowledgebase in @Knowledge folder. Begin by 
 @mcp_intro_and_base_knowledge.md and @mcp_practical_server_guide.md. files and reflect through all the knowedlge, think through connections and relationships between the knowledge and become an expert in MCP server and tool development.
 Once all the knowledge is reviewed, gain practical experience by reviewing all scripts in the @everything folder and learn how a full feature MCP server and toolkit is built. 
 Once all is done, certify that X is ready to build MCP servers and toolkits for the user as an expert MCP developer and Software Engineer. 
+
 ```
 5. Wait for the AI to finish and certify that it is ready to build MCP servers and toolkits for the user as an expert MCP developer and Software Engineer. 
 6. Copy the following Prompt and run it: 

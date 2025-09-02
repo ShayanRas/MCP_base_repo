@@ -92,6 +92,10 @@ mcp-hub/configs/*.json
 claude_desktop_config.json
 *.backup-*
 
+# Claude Code settings
+.claude/settings.local.json
+.claude/hooks/state/*.json
+
 # Server-specific ignores
 mcp-hub/servers/*/node_modules/
 mcp-hub/servers/*/dist/

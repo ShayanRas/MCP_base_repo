@@ -1,0 +1,13 @@
+{
+  "// Note": "Copy this to settings.local.json for personal settings",
+  "// Note2": "settings.local.json is git-ignored",
+  
+  "env": {
+    "MY_PERSONAL_API_KEY": "your-key-here",
+    "PERSONAL_DEBUG_LEVEL": "verbose"
+  },
+  
+  "options": {
+    "personalPreference": true
+  }
+}

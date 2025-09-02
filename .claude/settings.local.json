@@ -9,5 +9,9 @@
     ],
     "deny": [],
     "ask": []
+  },
+  "options": {
+    "personalPreference": true
   }
+  
 }
