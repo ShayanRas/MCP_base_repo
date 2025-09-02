@@ -10,6 +10,74 @@
           }
         ]
       }
+    ],
+    
+    "PreToolUse": [
+      {
+        "matcher": "Bash(*)",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node ${CLAUDE_PROJECT_DIR}/.claude/hooks/manual-build-guide.js"
+          }
+        ]
+      }
+    ],
+    
+    "PostToolUse": [
+      {
+        "matcher": "Write(mcp-hub/servers/*/package.json)",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node ${CLAUDE_PROJECT_DIR}/.claude/hooks/validate-server-structure.js"
+          },
+          {
+            "type": "command",
+            "command": "node ${CLAUDE_PROJECT_DIR}/.claude/hooks/ensure-docs.js"
+          }
+        ]
+      },
+      
+      {
+        "matcher": "Write(mcp-hub/servers/**)",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node ${CLAUDE_PROJECT_DIR}/.claude/hooks/check-registry.js"
+          }
+        ]
+      },
+      
+      {
+        "matcher": "Edit(mcp-hub/hub/registry.json)",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node ${CLAUDE_PROJECT_DIR}/.claude/hooks/validate-env.js"
+          }
+        ]
+      },
+      
+      {
+        "matcher": "Write(mcp-hub/servers/*/src/**)",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node ${CLAUDE_PROJECT_DIR}/.claude/hooks/auto-build-test.js"
+          }
+        ]
+      },
+      
+      {
+        "matcher": "Edit(mcp-hub/servers/*/src/**)",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node ${CLAUDE_PROJECT_DIR}/.claude/hooks/auto-build-test.js"
+          }
+        ]
+      }
     ]
   }
 }

@@ -5,6 +5,8 @@ import inquirer from 'inquirer';
 import chalk from 'chalk';
 import ora from 'ora';
 import { program } from 'commander';
+import { spawn } from 'child_process';
+import path from 'path';
 
 const manager = new MCPHubManager();
 
@@ -16,6 +18,109 @@ const showHeader = () => {
 ║   Manage Your MCP Servers Easily  ║
 ╚═══════════════════════════════════╝
   `));
+};
+
+// Inspect server with MCP Inspector
+const inspectServer = async (serverName) => {
+  const server = manager.getServer(serverName);
+  if (!server) {
+    console.log(chalk.red(`Server ${serverName} not found`));
+    return;
+  }
+
+  // Check if server is installed and built
+  const status = await manager.getServerStatus(serverName);
+  if (!status.ready && !status.built) {
+    console.log(chalk.yellow('\n⚠️  Server is not ready. Please run setup first.'));
+    const { runSetup } = await inquirer.prompt([{
+      type: 'confirm',
+      name: 'runSetup',
+      message: 'Would you like to setup the server now?',
+      default: true
+    }]);
+    
+    if (runSetup) {
+      const setupSpinner = ora('Setting up server...').start();
+      try {
+        await manager.setupServer(serverName, (msg) => {
+          setupSpinner.text = msg;
+        });
+        setupSpinner.succeed('Server setup complete');
+      } catch (error) {
+        setupSpinner.fail(`Setup failed: ${error.message}`);
+        return;
+      }
+    } else {
+      return;
+    }
+  }
+
+  // Get environment variables if needed
+  let envVars = {};
+  if (server.requiredEnv && Object.keys(server.requiredEnv).length > 0) {
+    console.log(chalk.yellow('\n📝 This server requires environment variables'));
+    envVars = await getEnvVars(serverName);
+  }
+
+  const serverPath = path.join(manager.hubRoot, server.path);
+  let inspectCmd = '';
+  let execPath = serverPath;
+  
+  // Build the appropriate inspect command based on server type
+  if (server.type === 'node') {
+    if (server.monorepo) {
+      // For monorepo, run from workspace root
+      execPath = serverPath;
+      const startCmd = server.commands.start;
+      inspectCmd = `npx @modelcontextprotocol/inspector ${startCmd}`;
+    } else {
+      const startCmd = server.commands.start;
+      inspectCmd = `npx @modelcontextprotocol/inspector ${startCmd}`;
+    }
+  } else if (server.type === 'python') {
+    // For Python servers, activate venv and run
+    const venvActivate = process.platform === 'win32' 
+      ? '.venv\\Scripts\\activate && ' 
+      : '. .venv/bin/activate && ';
+    inspectCmd = `${venvActivate}npx @modelcontextprotocol/inspector ${server.commands.start}`;
+  }
+
+  console.log(chalk.cyan('\n🔍 Launching MCP Inspector...'));
+  console.log(chalk.gray(`Server: ${server.name}`));
+  console.log(chalk.gray(`Path: ${execPath}`));
+  console.log(chalk.gray(`Command: ${inspectCmd}`));
+  console.log(chalk.yellow('\n📊 Inspector Features:'));
+  console.log('  • Test Tools - Execute and debug tool calls');
+  console.log('  • Browse Resources - Inspect available resources');
+  console.log('  • Test Prompts - Try prompt templates');
+  console.log('  • View Notifications - Monitor server logs');
+  console.log(chalk.green('\n✨ Inspector will open in your browser shortly...'));
+  
+  // Combine process env with server-specific env vars
+  const processEnv = { ...process.env };
+  for (const [key, value] of Object.entries(envVars)) {
+    processEnv[key] = value;
+  }
+  
+  // Execute the inspector command
+  const child = spawn(inspectCmd, [], {
+    shell: true,
+    cwd: execPath,
+    stdio: 'inherit',
+    env: processEnv
+  });
+
+  child.on('error', (error) => {
+    console.error(chalk.red(`\n❌ Failed to launch inspector: ${error.message}`));
+  });
+  
+  child.on('exit', (code) => {
+    if (code === 0) {
+      console.log(chalk.green('\n✅ Inspector closed successfully'));
+    } else if (code !== null) {
+      console.log(chalk.yellow(`\n⚠️  Inspector exited with code ${code}`));
+    }
+  });
 };
 
 // Show server status
@@ -379,6 +484,7 @@ const interactiveMenu = async () => {
       { name: '📁 Copy Config to Claude Desktop', value: 'copy' },
       { name: '🔍 View Claude Desktop Servers', value: 'view-claude' },
       { name: '🗑️ Manage Claude Desktop Servers', value: 'manage-claude' },
+      { name: '🔬 Debug Server with Inspector', value: 'inspect' },
       { name: '❌ Exit', value: 'exit' }
     ]
   }]);
@@ -406,6 +512,24 @@ const interactiveMenu = async () => {
   // Handle Manage Claude Desktop Servers
   if (action === 'manage-claude') {
     await manageClaudeServers();
+    return interactiveMenu();
+  }
+  
+  // Handle Inspector
+  if (action === 'inspect') {
+    const { selectedServer } = await inquirer.prompt([{
+      type: 'list',
+      name: 'selectedServer',
+      message: 'Select a server to inspect:',
+      choices: servers.map(name => {
+        const server = manager.getServer(name);
+        return {
+          name: `${server.name} - ${server.description}`,
+          value: name
+        };
+      })
+    }]);
+    await inspectServer(selectedServer);
     return interactiveMenu();
   }
   
