@@ -332,3 +332,4 @@ temp/
 # Keep configuration examples
 !config.example.json
 !settings.example.json
+.claude/hooks/test-brainstorm.js
