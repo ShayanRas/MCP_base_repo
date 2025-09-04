@@ -16,16 +16,22 @@ process.stdin.on('end', () => {
     const data = JSON.parse(input);
     checkRegistry(data);
   } catch (error) {
-    console.log(JSON.stringify({ blocked: false }));
+    process.exit(0);
   }
 });
 
 async function checkRegistry(data) {
-  const filePath = data.params?.file_path || data.file_path || '';
+  // Check if this is a Write operation
+  if (data.tool_name !== 'Write') {
+    process.exit(0);
+    return;
+  }
+  
+  const filePath = data.tool_input?.file_path || '';
   
   // Only check when files are created in servers directory
   if (!filePath.includes('mcp-hub/servers/')) {
-    console.log(JSON.stringify({ blocked: false }));
+    process.exit(0);
     return;
   }
   
@@ -111,16 +117,12 @@ Remember to:
 4. Adjust commands if needed
 `;
         
+        // Provide feedback to Claude about unregistered server
         console.log(JSON.stringify({
-          blocked: false,
-          message: message,
-          metadata: {
-            serverName: currentServer,
-            unregistered: true,
-            template: registryTemplate
-          }
+          decision: "block",
+          reason: message
         }));
-        return;
+        process.exit(0);
       }
     }
     
@@ -134,12 +136,10 @@ Remember to:
       
       if (phantomServers.length > 0) {
         console.log(JSON.stringify({
-          blocked: false,
-          message: `⚠️ Warning: Registry contains servers that don't exist on disk: ${phantomServers.join(', ')}`,
-          metadata: {
-            phantomServers
-          }
+          decision: "block",
+          reason: `⚠️ Warning: Registry contains servers that don't exist on disk: ${phantomServers.join(', ')}`
         }));
+        process.exit(0);
       }
     }
     
@@ -147,11 +147,13 @@ Remember to:
     // Registry might not exist yet or be malformed
     if (error.code === 'ENOENT') {
       console.log(JSON.stringify({
-        blocked: false,
-        message: "⚠️ Registry file not found. The registry should exist at mcp-hub/hub/registry.json"
+        decision: "block",
+        reason: "⚠️ Registry file not found. The registry should exist at mcp-hub/hub/registry.json"
       }));
+      process.exit(0);
     }
   }
   
-  console.log(JSON.stringify({ blocked: false }));
+  // All good - exit cleanly
+  process.exit(0);
 }

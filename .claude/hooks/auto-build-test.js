@@ -20,16 +20,22 @@ process.stdin.on('end', () => {
     const data = JSON.parse(input);
     autoBuildTest(data);
   } catch (error) {
-    console.log(JSON.stringify({ blocked: false }));
+    process.exit(0);
   }
 });
 
 async function autoBuildTest(data) {
-  const filePath = data.params?.file_path || data.file_path || '';
+  // Check if this is a Write or Edit operation
+  if (data.tool_name !== 'Write' && data.tool_name !== 'Edit') {
+    process.exit(0);
+    return;
+  }
+  
+  const filePath = data.tool_input?.file_path || '';
   
   // Only trigger for source files in servers
   if (!filePath.includes('mcp-hub/servers/') || !filePath.includes('/src/')) {
-    console.log(JSON.stringify({ blocked: false }));
+    process.exit(0);
     return;
   }
   
@@ -39,7 +45,7 @@ async function autoBuildTest(data) {
   const serverName = pathParts[serverIndex + 1];
   
   if (!serverName) {
-    console.log(JSON.stringify({ blocked: false }));
+    process.exit(0);
     return;
   }
   
@@ -72,12 +78,8 @@ async function autoBuildTest(data) {
   // Throttle builds (don't build more than once per 30 seconds)
   const now = Date.now();
   if (state[serverName].lastBuild && (now - state[serverName].lastBuild) < 30000) {
-    console.log(JSON.stringify({
-      blocked: false,
-      message: `⏱️ Skipping build for ${serverName} (recently built)`,
-      metadata: { throttled: true }
-    }));
-    return;
+    // Throttled - skip silently
+    process.exit(0);
   }
   
   try {
@@ -86,11 +88,12 @@ async function autoBuildTest(data) {
     const serverConfig = registry.servers[serverName];
     
     if (!serverConfig) {
+      // Server not in registry - provide feedback
       console.log(JSON.stringify({
-        blocked: false,
-        message: `⚠️ Server ${serverName} not found in registry. Register it first!`
+        decision: "block",
+        reason: `⚠️ Server ${serverName} not found in registry. Register it first!`
       }));
-      return;
+      process.exit(0);
     }
     
     // Check if package.json or pyproject.toml exists
@@ -99,10 +102,10 @@ async function autoBuildTest(data) {
     
     if (!fs.existsSync(packageJsonPath) && !fs.existsSync(pyprojectPath)) {
       console.log(JSON.stringify({
-        blocked: false,
-        message: `⚠️ No package.json or pyproject.toml found for ${serverName}`
+        decision: "block",
+        reason: `⚠️ No package.json or pyproject.toml found for ${serverName}`
       }));
-      return;
+      process.exit(0);
     }
     
     const messages = [];
@@ -187,31 +190,32 @@ async function autoBuildTest(data) {
     
     // Send response
     if (messages.length > 0) {
-      console.log(JSON.stringify({
-        blocked: false,
-        message: `
-🤖 Auto Build/Test for '${serverName}'
+      // Provide feedback about build/test results
+      const message = `🤖 Auto Build/Test for '${serverName}'
 
 ${messages.join('\n')}
 
 Server stats:
 - Build count: ${state[serverName].buildCount}
-- Last build: ${state[serverName].lastBuild ? new Date(state[serverName].lastBuild).toLocaleTimeString() : 'Never'}
-`,
-        metadata: {
-          serverName,
-          results,
-          state: state[serverName]
+- Last build: ${state[serverName].lastBuild ? new Date(state[serverName].lastBuild).toLocaleTimeString() : 'Never'}`;
+      
+      console.log(JSON.stringify({
+        hookSpecificOutput: {
+          hookEventName: "PostToolUse",
+          additionalContext: message
         }
       }));
+      process.exit(0);
     } else {
-      console.log(JSON.stringify({ blocked: false }));
+      process.exit(0);
     }
     
   } catch (error) {
+    // Error occurred - provide feedback
     console.log(JSON.stringify({
-      blocked: false,
-      message: `⚠️ Build/test check error: ${error.message}`
+      decision: "block",
+      reason: `⚠️ Build/test check error: ${error.message}`
     }));
+    process.exit(0);
   }
 }

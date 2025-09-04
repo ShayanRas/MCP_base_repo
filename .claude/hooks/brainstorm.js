@@ -43,13 +43,13 @@ process.stdin.on('end', () => {
     processHook(data);
   } catch (error) {
     // If there's an error, don't block - just pass through
-    console.log(JSON.stringify({ blocked: false }));
+    process.exit(0);
   }
 });
 
 function processHook(data) {
   // Check if this is a brainstorming trigger
-  const userMessage = data.userMessage || data.prompt || '';
+  const userMessage = data.prompt || '';
   const isTrigger = TRIGGERS.some(pattern => userMessage.match(pattern));
   
   // Load or initialize state
@@ -64,7 +64,7 @@ function processHook(data) {
     continueSession(userMessage, state);
   } else {
     // Not a brainstorming session
-    console.log(JSON.stringify({ blocked: false }));
+    process.exit(0);
   }
 }
 
@@ -104,14 +104,12 @@ Remember: You are working with a vibe coder who may not understand technical det
   
   // Return enhanced prompt
   console.log(JSON.stringify({
-    blocked: false,
-    enhancedPrompt: enhancedPrompt,
-    metadata: {
-      hookActivated: true,
-      phase: PHASES.INITIALIZING,
-      mode: 'mcp_consultation'
+    hookSpecificOutput: {
+      hookEventName: "UserPromptSubmit",
+      additionalContext: enhancedPrompt
     }
   }));
+  process.exit(0);
 }
 
 function continueSession(userMessage, state) {
@@ -144,14 +142,12 @@ ${phaseGuidance}
 `;
   
   console.log(JSON.stringify({
-    blocked: false,
-    enhancedPrompt: enhancedPrompt,
-    metadata: {
-      hookActive: true,
-      phase: state.phase,
-      messageCount: state.messageCount
+    hookSpecificOutput: {
+      hookEventName: "UserPromptSubmit",
+      additionalContext: enhancedPrompt
     }
   }));
+  process.exit(0);
 }
 
 function getPhaseGuidance(phase) {

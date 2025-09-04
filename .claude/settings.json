@@ -2,11 +2,10 @@
   "hooks": {
     "UserPromptSubmit": [
       {
-        "matcher": "*",
         "hooks": [
           {
             "type": "command",
-            "command": "node ${CLAUDE_PROJECT_DIR}/.claude/hooks/brainstorm.js"
+            "command": "node $CLAUDE_PROJECT_DIR/.claude/hooks/brainstorm.js"
           }
         ]
       }
@@ -14,11 +13,11 @@
     
     "PreToolUse": [
       {
-        "matcher": "Bash(*)",
+        "matcher": "Bash",
         "hooks": [
           {
             "type": "command",
-            "command": "node ${CLAUDE_PROJECT_DIR}/.claude/hooks/manual-build-guide.js"
+            "command": "node $CLAUDE_PROJECT_DIR/.claude/hooks/manual-build-guide.js"
           }
         ]
       }
@@ -26,55 +25,33 @@
     
     "PostToolUse": [
       {
-        "matcher": "Write(mcp-hub/servers/*/package.json)",
+        "matcher": "Write",
         "hooks": [
           {
             "type": "command",
-            "command": "node ${CLAUDE_PROJECT_DIR}/.claude/hooks/validate-server-structure.js"
+            "command": "node $CLAUDE_PROJECT_DIR/.claude/hooks/validate-server-structure.js"
           },
           {
             "type": "command",
-            "command": "node ${CLAUDE_PROJECT_DIR}/.claude/hooks/ensure-docs.js"
+            "command": "node $CLAUDE_PROJECT_DIR/.claude/hooks/ensure-docs.js"
+          },
+          {
+            "type": "command",
+            "command": "node $CLAUDE_PROJECT_DIR/.claude/hooks/check-registry.js"
           }
         ]
       },
       
       {
-        "matcher": "Write(mcp-hub/servers/**)",
+        "matcher": "Edit",
         "hooks": [
           {
             "type": "command",
-            "command": "node ${CLAUDE_PROJECT_DIR}/.claude/hooks/check-registry.js"
-          }
-        ]
-      },
-      
-      {
-        "matcher": "Edit(mcp-hub/hub/registry.json)",
-        "hooks": [
+            "command": "node $CLAUDE_PROJECT_DIR/.claude/hooks/validate-env.js"
+          },
           {
             "type": "command",
-            "command": "node ${CLAUDE_PROJECT_DIR}/.claude/hooks/validate-env.js"
-          }
-        ]
-      },
-      
-      {
-        "matcher": "Write(mcp-hub/servers/*/src/**)",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "node ${CLAUDE_PROJECT_DIR}/.claude/hooks/auto-build-test.js"
-          }
-        ]
-      },
-      
-      {
-        "matcher": "Edit(mcp-hub/servers/*/src/**)",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "node ${CLAUDE_PROJECT_DIR}/.claude/hooks/auto-build-test.js"
+            "command": "node $CLAUDE_PROJECT_DIR/.claude/hooks/auto-build-test.js"
           }
         ]
       }

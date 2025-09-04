@@ -1,17 +1,11 @@
 {
   "permissions": {
     "allow": [
-      "WebFetch(domain:supabase.com)",
-      "Bash(~/.local/bin/uv pip list:*)",
-      "Bash(cat:*)",
-      "WebFetch(domain:pypi.org)",
-      "WebSearch"
+      "Read(//home/shayan/.claude/**)",
+      "Bash(echo:*)",
+      "Bash(node:*)"
     ],
     "deny": [],
     "ask": []
-  },
-  "options": {
-    "personalPreference": true
   }
-  
 }

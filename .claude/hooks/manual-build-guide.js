@@ -16,18 +16,19 @@ process.stdin.on('end', () => {
     const data = JSON.parse(input);
     checkBuildCommand(data);
   } catch (error) {
-    console.log(JSON.stringify({ blocked: false }));
+    // If there's an error, don't block - just pass through
+    process.exit(0);
   }
 });
 
 async function checkBuildCommand(data) {
   // Check if this is a Bash command
-  if (data.tool !== 'Bash') {
-    console.log(JSON.stringify({ blocked: false }));
+  if (data.tool_name !== 'Bash') {
+    process.exit(0);
     return;
   }
   
-  const command = data.params?.command || '';
+  const command = data.tool_input?.command || '';
   
   // Patterns that indicate build/compile commands
   const buildPatterns = [
@@ -49,13 +50,13 @@ async function checkBuildCommand(data) {
   const isBuildCommand = buildPatterns.some(pattern => command.match(pattern));
   
   if (!isBuildCommand) {
-    console.log(JSON.stringify({ blocked: false }));
+    process.exit(0);
     return;
   }
   
   // Check if this is in the mcp-hub context
   const isMcpContext = command.includes('mcp') || 
-                       data.params?.cwd?.includes('mcp-hub') ||
+                       data.tool_input?.cwd?.includes('mcp-hub') ||
                        process.cwd().includes('mcp-hub');
   
   // Extract what type of command this is
@@ -72,7 +73,7 @@ async function checkBuildCommand(data) {
   let serverName = null;
   if (isMcpContext) {
     // Try to extract server name from command or cwd
-    const cwdMatch = (data.params?.cwd || '').match(/servers\/([^\/]+)/);
+    const cwdMatch = (data.tool_input?.cwd || '').match(/servers\/([^\/]+)/);
     if (cwdMatch) {
       serverName = cwdMatch[1];
     }
@@ -136,14 +137,10 @@ ${commandType === 'TypeScript compilation' ? `
 ${serverName ? `\n**For MCP Hub**: You can also use \`npm run mcp\` from the hub root to manage builds through the menu.` : ''}
 `;
   
-  console.log(JSON.stringify({
-    blocked: false,
-    message: message,
-    metadata: {
-      commandType,
-      originalCommand: command,
-      serverName,
-      requiresManualRun: true
-    }
-  }));
+  // For PreToolUse hooks, we can ask the user or provide feedback
+  // Using stdout to provide the message to the user  
+  console.log(message);
+  // Exit with code 0 to allow the command to proceed
+  // (or exit 2 if we want to block it and have Claude handle differently)
+  process.exit(0);
 }

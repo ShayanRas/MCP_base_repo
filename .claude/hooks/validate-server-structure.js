@@ -17,16 +17,22 @@ process.stdin.on('end', () => {
     validateServerStructure(data);
   } catch (error) {
     // Don't block on error
-    console.log(JSON.stringify({ blocked: false }));
+    process.exit(0);
   }
 });
 
 async function validateServerStructure(data) {
+  // Check if this is a Write operation
+  if (data.tool_name !== 'Write') {
+    process.exit(0);
+    return;
+  }
+  
   // Check if this is a package.json creation in servers directory
-  const filePath = data.params?.file_path || data.file_path || '';
+  const filePath = data.tool_input?.file_path || '';
   
   if (!filePath.includes('mcp-hub/servers/') || !filePath.endsWith('package.json')) {
-    console.log(JSON.stringify({ blocked: false }));
+    process.exit(0);
     return;
   }
 
@@ -36,7 +42,7 @@ async function validateServerStructure(data) {
   const serverName = pathParts[serverIndex + 1];
   
   if (!serverName) {
-    console.log(JSON.stringify({ blocked: false }));
+    process.exit(0);
     return;
   }
 
@@ -148,23 +154,14 @@ Next steps:
 3. Don't forget to register in hub/registry.json
 `;
     
+    // For PostToolUse hooks, provide feedback to Claude if there are issues
     console.log(JSON.stringify({
-      blocked: false,
-      message: message,
-      metadata: {
-        serverName,
-        issues,
-        suggestions
-      }
+      decision: "block",
+      reason: message
     }));
+    process.exit(0);
   } else {
-    console.log(JSON.stringify({
-      blocked: false,
-      message: `✅ Server structure for '${serverName}' looks good! Don't forget to register it in hub/registry.json`,
-      metadata: {
-        serverName,
-        valid: true
-      }
-    }));
+    // All good - just exit cleanly
+    process.exit(0);
   }
 }

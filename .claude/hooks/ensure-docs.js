@@ -16,17 +16,23 @@ process.stdin.on('end', () => {
     const data = JSON.parse(input);
     ensureDocumentation(data);
   } catch (error) {
-    console.log(JSON.stringify({ blocked: false }));
+    process.exit(0);
   }
 });
 
 async function ensureDocumentation(data) {
-  const filePath = data.params?.file_path || data.file_path || '';
+  // Check if this is a Write operation
+  if (data.tool_name !== 'Write') {
+    process.exit(0);
+    return;
+  }
+  
+  const filePath = data.tool_input?.file_path || '';
   
   // Trigger on package.json creation or main file updates
   if (!filePath.includes('mcp-hub/servers/') || 
       (!filePath.endsWith('package.json') && !filePath.endsWith('index.js'))) {
-    console.log(JSON.stringify({ blocked: false }));
+    process.exit(0);
     return;
   }
   
@@ -36,7 +42,7 @@ async function ensureDocumentation(data) {
   const serverName = pathParts[serverIndex + 1];
   
   if (!serverName) {
-    console.log(JSON.stringify({ blocked: false }));
+    process.exit(0);
     return;
   }
   
@@ -266,21 +272,16 @@ Suggestions:
 ${suggestions.map(s => `  💡 ${s}`).join('\n')}
 
 Good documentation helps vibe coders understand and use your server!
-`,
-      metadata: {
-        serverName,
-        issues,
-        suggestions
-      }
-    }));
-  } else {
+`;
+    
+    // For PostToolUse hooks, provide feedback to Claude if there are issues
     console.log(JSON.stringify({
-      blocked: false,
-      message: `✅ Documentation for '${serverName}' looks complete!`,
-      metadata: {
-        serverName,
-        complete: true
-      }
+      decision: "block",
+      reason: message
     }));
+    process.exit(0);
+  } else {
+    // All good - just exit cleanly
+    process.exit(0);
   }
 }

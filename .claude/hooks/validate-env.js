@@ -16,16 +16,22 @@ process.stdin.on('end', () => {
     const data = JSON.parse(input);
     validateEnvironment(data);
   } catch (error) {
-    console.log(JSON.stringify({ blocked: false }));
+    process.exit(0);
   }
 });
 
 async function validateEnvironment(data) {
-  const filePath = data.params?.file_path || data.file_path || '';
+  // Check if this is an Edit operation
+  if (data.tool_name !== 'Edit') {
+    process.exit(0);
+    return;
+  }
+  
+  const filePath = data.tool_input?.file_path || '';
   
   // Only check when registry.json is edited
   if (!filePath.endsWith('registry.json')) {
-    console.log(JSON.stringify({ blocked: false }));
+    process.exit(0);
     return;
   }
   
@@ -152,26 +158,19 @@ Best practices:
 - Document all required environment variables in registry.json
 `;
       
+      // Provide feedback to Claude about env issues
       console.log(JSON.stringify({
-        blocked: false,
-        message: message,
-        metadata: {
-          issues,
-          suggestions
-        }
+        decision: "block",
+        reason: message
       }));
+      process.exit(0);
     } else {
-      console.log(JSON.stringify({
-        blocked: false,
-        message: "✅ Environment configuration looks good!",
-        metadata: {
-          valid: true
-        }
-      }));
+      // All good - exit cleanly
+      process.exit(0);
     }
     
   } catch (error) {
     // Registry might be malformed during editing
-    console.log(JSON.stringify({ blocked: false }));
+    process.exit(0);
   }
 }
