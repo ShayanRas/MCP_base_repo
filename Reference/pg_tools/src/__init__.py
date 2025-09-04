@@ -1,3 +1,0 @@
-"""
-PostgreSQL MCP Server package.
-"""
