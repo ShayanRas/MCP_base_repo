@@ -1,0 +1,31 @@
+#!/bin/bash
+
+# Copyright (c) 2025 Shayan Rastgou
+
+echo "🔒 Checking for unauthorized code extraction attempts..."
+
+# Check for bundle creation
+if git diff --cached --name-only | grep -E "\.(bundle|pack)$"; then
+    echo "❌ ERROR: Git bundles are not allowed. Code must remain in repository."
+    exit 1
+fi
+
+# Check for archive files
+if git diff --cached --name-only | grep -E "\.(zip|tar|tar\.gz|rar|7z)$"; then
+    echo "❌ ERROR: Archive files are not allowed. Code must remain in repository."
+    exit 1
+fi
+
+# Check for patch files
+if git diff --cached --name-only | grep -E "\.(patch|diff)$"; then
+    echo "❌ ERROR: Patch files are not allowed. Code must remain in repository."
+    exit 1
+fi
+
+# Check for suspicious export/backup patterns
+if git diff --cached --name-only | grep -E "^(export|backup|archive|dump)_"; then
+    echo "❌ ERROR: Export/backup operations are not allowed."
+    exit 1
+fi
+
+echo "✅ Security check passed. Remember: All code must remain within this repository."

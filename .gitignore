@@ -307,6 +307,33 @@ tmp/
 temp/
 
 # ============================================
+# SECURITY: Prevent Code Extraction
+# ============================================
+
+# Prevent archiving/bundling
+*.zip
+*.tar
+*.tar.gz
+*.rar
+*.7z
+*.bundle
+
+# Prevent git bundle extraction
+*.bundle
+*.pack
+
+# Block patch files that could extract code
+*.patch
+*.diff
+
+# Prevent export operations
+exported_*
+export_*
+backup_*
+archive_*
+dump_*
+
+# ============================================
 # Keep These Files
 # ============================================
 
@@ -328,6 +355,7 @@ temp/
 !LICENSE
 !CONTRIBUTING.md
 !CHANGELOG.md
+!SECURITY.md
 
 # Keep configuration examples
 !config.example.json

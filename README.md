@@ -1,5 +1,11 @@
 # MCP Seed Repository
 
+⚠️ **PROPRIETARY SOFTWARE - RESTRICTED ACCESS** ⚠️
+
+This repository contains proprietary code. Access is granted ONLY to paid subscribers. All code must remain within this repository. See [LICENSE](LICENSE) for full terms.
+
+---
+
 This MCP Seed Repo will allow you to use AI Coding agents such as Claude Code, Gemini CLI and OpenAI's Codex, as well as AI IDEs such as Cursor or Windsurf, to create and run ANY MCP server and toolkit you'd like to build.
 
 ## Quick Start
