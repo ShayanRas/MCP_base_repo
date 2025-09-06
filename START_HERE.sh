@@ -18,7 +18,7 @@ echo "========================================"
 echo ""
 
 # Check if mcp-hub directory exists
-if [ ! -f "mcp-hub/start_here.sh" ]; then
+if [ ! -f "mcp-hub/START_HERE.sh" ]; then
     echo "Error: mcp-hub directory not found!"
     echo "Please make sure you're in the correct directory."
     exit 1
@@ -26,7 +26,7 @@ fi
 
 # Navigate to mcp-hub and run the setup
 cd mcp-hub
-bash start_here.sh
+bash START_HERE.sh "$@"
 SETUP_RESULT=$?
 cd ..
 
@@ -38,5 +38,7 @@ fi
 
 echo ""
 echo "Ready to use MCP Hub!"
-echo "Run 'cd mcp-hub && npm run mcp' to start the interactive menu."
+echo ""
+echo "To start the interactive menu:"
+echo "  cd mcp-hub && npm run mcp"
 echo ""
