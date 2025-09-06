@@ -26,6 +26,22 @@ cd mcp-seed
 
 That's it. The script will install everything and launch the MCP Hub menu.
 
+### Running MCP Hub After Setup
+
+Once setup is complete, you can launch the MCP Hub directly from the root:
+
+**Windows:**
+```bash
+MCP.bat
+```
+
+**Mac/Linux:**
+```bash
+./MCP.sh
+```
+
+No need to navigate to mcp-hub anymore - just run from root!
+
 ## How Does It Work?
 
 I've prepared the repo in two main sections:
