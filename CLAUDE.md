@@ -7,12 +7,19 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ### MCP Hub Management
 - **Launch interactive menu**: `npm run mcp` (from mcp-hub directory)
 - **Direct server launch**: `npm run mcp -- --<server-name>` (e.g., `--supabase`, `--everything`)
+- **HTTP mode**: `npm run mcp -- --http` - Default to HTTP/SSE mode for servers
 - **Setup servers**: `npm run setup` - Install dependencies and launch menu
 - **Test connections**: `npm run test` - Test all server connections
 - **Environment management**:
   - `npm run mcp:env` - Show current environment variables
   - `npm run mcp:env:init` - Initialize environment configuration
   - `npm run mcp:env:validate` - Validate environment setup
+
+**HTTP/SSE Server Management**:
+- **Monitor servers**: Option in menu - View running HTTP servers with health status
+- **Stop servers**: Stop individual or all HTTP servers
+- **View logs**: Check server logs in real-time
+- **Manage auth**: Generate and manage API keys for secure access
 
 **New Claude Desktop Management Features**:
 - **View Claude Desktop Servers**: Option 7 in menu - Shows all MCP servers currently configured in Claude Desktop
@@ -70,16 +77,42 @@ MCP_base_repo/
 - Supports both regular and monorepo server structures
 - Handles different package managers (npm, pnpm, uv)
 
+**Process Manager** (`mcp-hub/hub/process-manager.js`):
+- Manages HTTP/SSE server lifecycle
+- Tracks running servers and ports
+- Handles logging and health checks
+- Provides graceful shutdown on exit
+
 **Server Registry** (`mcp-hub/hub/registry.json`):
 - Defines server metadata, paths, and commands
 - Specifies required/optional environment variables
 - Tracks installation and build status
 - Configures monorepo-specific settings
+- Defines transport modes (stdio, http, sse)
 
 **Server Types**:
 1. **Node.js servers**: Use TypeScript/JavaScript with MCP SDK
 2. **Python servers**: Use Python with mcp package
 3. **Monorepo servers**: Require special handling for workspace dependencies
+
+### Transport Modes
+
+All servers in the hub support multiple transport modes:
+
+**stdio (Local)**:
+- Traditional subprocess communication
+- Direct integration with Claude Desktop
+- Best for local development
+
+**HTTP/SSE (Remote)**:
+- Run servers on any network-accessible machine
+- Support for multiple clients
+- Built-in authentication with API keys
+- Live monitoring and health checks
+
+When launching a server, you'll be prompted to choose:
+- Local mode for Claude Desktop integration
+- Remote mode for HTTP/SSE accessibility
 
 ### Adding New Servers
 1. Copy server to `mcp-hub/servers/<name>`

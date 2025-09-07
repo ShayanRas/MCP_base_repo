@@ -193,6 +193,12 @@ if errorlevel 1 (
     echo [%date% %time%] Hub dependencies installed >> "%LOG_FILE%"
 )
 
+:: Create necessary directories
+echo Creating required directories...
+if not exist "logs" mkdir logs 2>nul
+if not exist "configs" mkdir configs 2>nul
+echo    [OK] Directories ready
+
 :: Check for .env file
 if not exist ".env" (
     if exist ".env.example" (
@@ -360,11 +366,13 @@ echo The MCP Hub will now launch with the interactive menu.
 echo.
 echo Quick Guide:
 echo   1. Select a server from the menu
-echo   2. Choose an action (setup, test, configure)
-echo   3. Follow the prompts
+echo   2. Choose LOCAL (stdio) or REMOTE (HTTP/SSE) mode
+echo   3. Follow the prompts for setup and configuration
 echo.
-echo For help and documentation, visit:
-echo   https://github.com/anthropics/mcp-hub
+echo New Features:
+echo   - HTTP/SSE Support - Run servers remotely
+echo   - Live Monitoring - Track running HTTP servers
+echo   - API Authentication - Secure your servers
 echo.
 echo ========================================================
 echo.

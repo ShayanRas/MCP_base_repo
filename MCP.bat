@@ -7,6 +7,14 @@ echo.
 echo ========================================
 echo    Launching MCP Hub Manager...
 echo ========================================
+
+REM Check for --http flag
+echo %* | findstr /C:"--http" >nul
+if %errorlevel%==0 (
+    echo.
+    echo 🌐 HTTP mode enabled - servers will run remotely
+)
+
 echo.
 
 REM Check if mcp-hub directory exists
@@ -43,6 +51,11 @@ cd ..
 
 echo.
 echo MCP Hub closed.
-echo To run again: MCP.bat
+echo.
+echo Available options:
+echo   MCP.bat           - Launch interactive menu
+echo   MCP.bat --http    - Enable HTTP mode by default
+echo   MCP.bat --debug   - Enable debug output
+echo   MCP.bat --^<server^> - Quick launch specific server
 echo.
 pause

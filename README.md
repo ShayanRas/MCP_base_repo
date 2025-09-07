@@ -1,26 +1,37 @@
-# MCP Seed Repository
+# SR's MCP Seed Repo
+This repo is desigend for vibe coders and semi-technical users looking to build their own MPC servers and custom tools with AI Agents.
 
-⚠️ **PROPRIETARY SOFTWARE - RESTRICTED ACCESS** ⚠️
+With this package, wich includes the required knowledge base and infrastructure, you can use AI Coding agents such as Claude Code, Gemini CLI and OpenAI's Codex, as well as AI IDEs such as Cursor or Windsurf, to create and run ANY MCP server and toolkit you'd like to build.
 
-This repository contains proprietary code. Access is granted ONLY to paid subscribers. All code must remain within this repository. See [LICENSE](LICENSE) for full terms.
+I've taken care of all the complexities of MCP development, including installing, debugging, running and adding them to Claude Desktop automatically. All you have to do is clone the repo, run the START_HERE script and follow the prompts. It also include a prepared CLAUDE.md (or IDE memory file) to tune your AI coding agent perfectly to build and extend MCPs.
 
----
+## Package Includes:
+- MCP Hub (mcp-hub)
+- MCP Knowledge Base
+- Example Servers
+- My highly saught after Text to SQL Server
+- MCP Inspector
+- Prompt Pack for Vibe Software Engineering gathered from my experience building a six figure business with AI Agents
+- Preapred CLAUDE.md (or IDE memory file)
 
-This MCP Seed Repo will allow you to use AI Coding agents such as Claude Code, Gemini CLI and OpenAI's Codex, as well as AI IDEs such as Cursor or Windsurf, to create and run ANY MCP server and toolkit you'd like to build.
+**Best Practices to make MCP development easier:**
+1. Always use Github Desktop to track and manage changes to your code. Install Github from here: [Click here](https://desktop.github.com/download/)
+2. If you're using windows, install WSL. follow [this link](https://learn.microsoft.com/en-us/windows/wsl/install) to learn how to. 
+3. I've already trained the AI to walk you through this when needed, but be prepared to run important tests like "npm run build, npx tsc" etc. yourself
 
-## Quick Start
+
+## Getting Started
 
 **Windows:**
-```bash
-git clone https://github.com/your-repo/mcp-seed
-cd mcp-seed
-START_HERE.bat
+Open your terminal in the project root and run:
+```Powershell
+./START_HERE.bat
 ```
-
+```Bash (WSL)
+./START_HERE.sh
+```
 **Mac/Linux:**
 ```bash
-git clone https://github.com/your-repo/mcp-seed
-cd mcp-seed
 ./START_HERE.sh
 ```
 
@@ -31,22 +42,22 @@ That's it. The script will install everything and launch the MCP Hub menu.
 Once setup is complete, you can launch the MCP Hub directly from the root:
 
 **Windows:**
-```bash
+```Powershell
 MCP.bat
 ```
 
-**Mac/Linux:**
-```bash
+**Mac/Linux/WSL:**
+```Bash
 ./MCP.sh
 ```
 
-No need to navigate to mcp-hub anymore - just run from root!
 
 ## How Does It Work?
 
 I've prepared the repo in two main sections:
-1) **The MCP Management and Debug Hub** (mcp-hub) - Your control center for building and testing MCP servers
-2) **The Knowledge Base** - Everything your AI needs to know about building MCPs
+1) **The MCP Management and Debug Hub** (mcp-hub) - Your control center for building and testing MCP servers, as well as launching Inspector for debugging tools.
+
+2) **The Knowledge Base** - Everything your AI needs to know about building MCPs. Run your AI with this KB and the prompt pack provided to build and extend MCPs as you like.
 
 ## The MCP Hub
 
@@ -57,14 +68,44 @@ It's a simple menu system that handles all the annoying parts of MCP development
 The hub comes with three example servers ready to go:
 - **Everything** - Shows off all MCP features (good for learning)
 - **Supabase** - Connect to your Supabase databases
-- **pg_tools** - Direct PostgreSQL access
+- **My highly saught after Text to SQL Toolkit** - Direct PostgreSQL access both local and remote.
 
-### Features That Actually Matter
-
+### Features
 - **One-click setup** - Installs Node, Python, UV, everything you need
 - **Debug mode** - When things break (they will), run with `--debug` to see what's happening
 - **Inspector built-in** - Test your MCP tools without leaving the terminal
 - **Auto-config for Claude** - Generates and installs configs automatically
+- **HTTP/SSE Support** - Run MCP servers remotely over HTTP or Server-Sent Events
+- **Live Monitoring** - Real-time dashboard to monitor running HTTP servers
+- **API Authentication** - Secure your HTTP servers with API key authentication
+
+### Remote HTTP/SSE Mode
+
+All MCP servers in the hub now support running over HTTP, not just local stdio. This means:
+
+- **Run servers on remote machines** - Access your MCP servers from anywhere
+- **Share servers with teammates** - One server, multiple users  
+- **Use with Claude Code** - Connect Claude Code to your remote servers
+- **SSE or StreamableHTTP** - Choose between Server-Sent Events or standard HTTP
+
+When launching a server, you'll be asked:
+1. **Local or Remote?** - Choose remote for HTTP mode
+2. **Pick a port** - Hub finds available ports automatically
+3. **Enable authentication?** - Secure with API keys if needed
+
+Quick launch with HTTP mode:
+```bash
+# Windows
+./MCP.bat --http
+
+# Mac/Linux/WSL
+./MCP.sh --http
+```
+
+To monitor running HTTP servers:
+- From MCP Hub menu, select "🖥️ Monitor Running Servers"  
+- Choose simple view or interactive dashboard
+- Press 's' to stop a server, 'R' to restart
 
 ## Building Your Own MCP
 
@@ -75,28 +116,13 @@ Claude Code will produce the best result, most consistently. I've prepared an in
 Just open this repo in Claude Code and type: **"let's start building"**
 
 Claude will:
-1. Review the MCP knowledge base
+1. Review the MCP knowledge base I've prepared in the right order
 2. Ask what you want to build
 3. Create a proper MCP server structure
 4. Integrate it with the hub automatically
 
-### Manual Development
-
-1. Create your server in `mcp-hub/servers/your-server-name/`
-2. Add it to `mcp-hub/hub/registry.json`
-3. Run `npm run mcp` from the mcp-hub directory
-4. Select your server and test it
-
-## The Knowledge Base
-
-Located in `/Reference/Knowledge/`, it contains:
-- `mcp_intro_and_base_knowledge.md` - Core MCP concepts
-- `mcp_practical_server_guide.md` - Step-by-step implementation guide
-- Example servers and patterns
-
 ## Prompt Pack
-
-The repo includes a Prompt Pack (`Reference/prompt_pack.md`) to help you with any phase of the development process. Use these when you get stuck or need to debug something tricky.
+This is my personally tailored prompt pack that's helped me build and run a six figure business with with the help of AI Agents. Prompts are specifically optimized by me to be as effective as possible. Each prompt has a appropriate timing and way of use, that's laid out in the prompt pack. 
 
 ## Requirements
 
@@ -117,7 +143,7 @@ chmod +x START_HERE.sh
 **Debug mode for when things go wrong:**
 ```bash
 # Windows
-START_HERE.bat --debug
+./START_HERE.bat --debug
 
 # Mac/Linux
 ./START_HERE.sh --debug

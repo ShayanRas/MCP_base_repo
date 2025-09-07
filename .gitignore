@@ -88,6 +88,10 @@ yarn.lock
 mcp-hub/configs/*.json
 !mcp-hub/configs/.gitkeep
 
+# MCP Hub auth and process files
+mcp-hub/.mcp-auth.json
+mcp-hub/.mcp-processes.json
+
 # Claude Desktop configs (contain sensitive tokens)
 claude_desktop_config.json
 *.backup-*

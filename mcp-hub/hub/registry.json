@@ -7,10 +7,23 @@
       "type": "node",
       "monorepo": true,
       "packageManager": "pnpm",
+      "transportModes": [
+        "stdio",
+        "sse",
+        "http"
+      ],
+      "httpConfig": {
+        "defaultPort": 3002,
+        "endpoint": "/mcp",
+        "sseEndpoint": "/sse",
+        "authEnabled": false
+      },
       "commands": {
         "install": "pnpm install",
         "build": "pnpm build",
         "start": "node packages/mcp-server-supabase/dist/transports/stdio.js",
+        "start:sse": "node packages/mcp-server-supabase/dist/transports/sse.js",
+        "start:http": "node packages/mcp-server-supabase/dist/transports/streamableHttp.js",
         "test": "node test-connection.js"
       },
       "requiredEnv": {
@@ -46,10 +59,23 @@
       "type": "node",
       "monorepo": false,
       "packageManager": "npm",
+      "transportModes": [
+        "stdio",
+        "sse",
+        "http"
+      ],
+      "httpConfig": {
+        "defaultPort": 3001,
+        "endpoint": "/mcp",
+        "sseEndpoint": "/sse",
+        "authEnabled": false
+      },
       "commands": {
         "install": "npm install",
         "build": "npm run build",
-        "start": "node dist/stdio.js"
+        "start": "node dist/stdio.js",
+        "start:sse": "node dist/sse.js",
+        "start:http": "node dist/streamableHttp.js"
       },
       "requiredEnv": {},
       "optionalArgs": [],
@@ -72,10 +98,21 @@
       "type": "python",
       "monorepo": false,
       "packageManager": "pip",
+      "transportModes": [
+        "stdio",
+        "http"
+      ],
+      "httpConfig": {
+        "defaultPort": 3003,
+        "endpoint": "/mcp",
+        "sseEndpoint": "/mcp/sse",
+        "authEnabled": false
+      },
       "commands": {
         "install": "uv pip install -e .",
         "build": "none",
         "start": "python -m mcp_server_pg.server",
+        "start:http": "python -m mcp_server_pg.http_server",
         "test": "python -m mcp_server_pg.server"
       },
       "requiredEnv": {
@@ -109,6 +146,15 @@
     "defaultPackageManager": "npm",
     "autoInstall": true,
     "autoBuild": true,
-    "backupConfigs": true
+    "backupConfigs": true,
+    "httpPortRange": {
+      "start": 3000,
+      "end": 3100
+    },
+    "monitoring": {
+      "enabled": true,
+      "autoRestart": true,
+      "healthCheckInterval": 30000
+    }
   }
 }
