@@ -1,3 +1,30 @@
+## MCP Building Process:
+
+1 - To start type "let's start building" and wait for Claude to review the MCP knowledge base and become an expert in MCP server and tool development. 
+2 - Simply explain what your vision is in your own words
+3 - Add "ultrathink, Let's Discuss Consciely"
+4 - Hit enter (send message)
+5 - Answer the Agent's clarifying questions and go into PLAN MODE.
+6 - Hit enter (send message)
+7 - Review the plan and make any changes to plan as needed
+8 - Accept the plan and switch to auto-edit mode.
+9 - Watch your AI Agent build and integrate the MCP server and tools into the MCP hub.
+10 - Launch ./START_HERE.sh (mac) or ./START_HERE.bat (windows powershell) to start the MCP hub.
+11 - Select your MCP server to install and add to Claude Desktop
+12 - Close and restart Claude Desktop and see your MCP working
+
+Congradulations! You've successfully built your first MCP server and tools. You can now use them to build and integrate more MCP servers and tools into the MCP hub!
+
+
+
+
+
+
+
+
+
+
+
 ## When things get complex or you're facing a bug, add AFTER your error message to the start of the prompt:
 ---GO INTO PLAN MODE---
 [Paste your error message]
