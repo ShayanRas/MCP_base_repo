@@ -4,14 +4,16 @@
 2 - Simply explain what your vision is in your own words
 3 - Add "ultrathink, Let's Discuss Consciely"
 4 - Hit enter (send message)
-5 - Answer the Agent's clarifying questions and go into PLAN MODE.
-6 - Hit enter (send message)
-7 - Review the plan and make any changes to plan as needed
-8 - Accept the plan and switch to auto-edit mode.
-9 - Watch your AI Agent build and integrate the MCP server and tools into the MCP hub.
-10 - Launch ./START_HERE.sh (mac) or ./START_HERE.bat (windows powershell) to start the MCP hub.
-11 - Select your MCP server to install and add to Claude Desktop
-12 - Close and restart Claude Desktop and see your MCP working
+5 - Answer the Agent's clarifying questions and 
+6 - go into PLAN MODE
+7 - add "ultrathink" to the end of your prompt and
+8 - Hit enter (send message)
+9 - Review the plan and make any changes to plan as needed
+10 - Accept the plan and switch to auto-edit mode.
+11 - Watch your AI Agent build and integrate the MCP server and tools into the MCP hub.
+12 - Launch ./START_HERE.sh (mac) or ./START_HERE.bat (windows powershell) to start the MCP hub.
+13 - Select your MCP server to install and add to Claude Desktop
+14 - Close and restart Claude Desktop and see your MCP working
 
 Congradulations! You've successfully built your first MCP server and tools. You can now use them to build and integrate more MCP servers and tools into the MCP hub!
 
