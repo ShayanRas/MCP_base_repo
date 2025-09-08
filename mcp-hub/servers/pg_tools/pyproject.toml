@@ -8,9 +8,6 @@ dependencies = [
     "mcp[cli]",
     "psycopg[binary,pool]>=3.2.9",
     "python-dotenv",
-    "aiohttp>=3.9.0",
-    "aiohttp-sse>=2.2.0",
-    "aiohttp-cors>=0.7.0",
 ]
 
 [project.scripts]

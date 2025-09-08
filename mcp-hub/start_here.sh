@@ -199,12 +199,6 @@ else
     echo "[$(date)] Hub dependencies installed" >> "$LOG_FILE"
 fi
 
-# Create necessary directories
-echo "Creating required directories..."
-mkdir -p logs 2>/dev/null
-mkdir -p configs 2>/dev/null
-echo "   [OK] Directories ready"
-
 # Check for .env file
 if [ ! -f ".env" ]; then
     if [ -f ".env.example" ]; then
@@ -371,13 +365,11 @@ echo "The MCP Hub will now launch with the interactive menu."
 echo ""
 echo "Quick Guide:"
 echo "  1. Select a server from the menu"
-echo "  2. Choose LOCAL (stdio) or REMOTE (HTTP/SSE) mode"
-echo "  3. Follow the prompts for setup and configuration"
+echo "  2. Choose an action (setup, test, configure)"
+echo "  3. Follow the prompts"
 echo ""
-echo "New Features:"
-echo "  • HTTP/SSE Support - Run servers remotely"
-echo "  • Live Monitoring - Track running HTTP servers"
-echo "  • API Authentication - Secure your servers"
+echo "For help and documentation, visit:"
+echo "  https://github.com/anthropics/mcp-hub"
 echo ""
 echo "========================================================"
 echo ""

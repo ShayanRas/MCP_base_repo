@@ -14,13 +14,6 @@ echo ""
 echo "========================================"
 echo "   Launching MCP Hub Manager..."
 echo "========================================"
-
-# Check for --http flag
-if [[ "$*" == *"--http"* ]]; then
-    echo ""
-    echo "🌐 HTTP mode enabled - servers will run remotely"
-fi
-
 echo ""
 
 # Check if mcp-hub directory exists
@@ -55,10 +48,5 @@ cd ..
 
 echo ""
 echo "MCP Hub closed."
-echo ""
-echo "Available options:"
-echo "  ./MCP.sh           - Launch interactive menu"
-echo "  ./MCP.sh --http    - Enable HTTP mode by default"
-echo "  ./MCP.sh --debug   - Enable debug output"
-echo "  ./MCP.sh --<server> - Quick launch specific server"
+echo "To run again: ./MCP.sh"
 echo ""

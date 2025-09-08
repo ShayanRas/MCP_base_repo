@@ -1,7 +1,6 @@
 #!/usr/bin/env node
 
 import { MCPHubManager } from './manager.js';
-import processManager from './process-manager.js';
 import inquirer from 'inquirer';
 import chalk from 'chalk';
 import ora from 'ora';
@@ -10,25 +9,6 @@ import { spawn } from 'child_process';
 import path from 'path';
 
 const manager = new MCPHubManager();
-
-// Cleanup handler for graceful shutdown
-process.on('SIGINT', async () => {
-  console.log(chalk.yellow('\n\n⚠️  Shutting down...'));
-  const runningServers = processManager.getRunningServers();
-  
-  if (runningServers.length > 0) {
-    console.log(chalk.yellow(`Stopping ${runningServers.length} running HTTP server(s)...`));
-    await processManager.stopAllServers();
-    console.log(chalk.green('✅ All servers stopped'));
-  }
-  
-  process.exit(0);
-});
-
-process.on('SIGTERM', async () => {
-  await processManager.stopAllServers();
-  process.exit(0);
-});
 
 // ASCII Art Header
 const showHeader = () => {
@@ -226,23 +206,6 @@ const getEnvVars = async (serverName) => {
 const quickLaunch = async (serverName) => {
   console.log(chalk.bold(`\n🚀 Quick launching ${serverName}...\n`));
   
-  const server = manager.getServer(serverName);
-  
-  // Check if server supports HTTP transport
-  let transportMode = 'stdio';
-  if (server.transportModes && server.transportModes.length > 1) {
-    const { mode } = await inquirer.prompt([{
-      type: 'list',
-      name: 'mode',
-      message: 'How would you like to run this server?',
-      choices: [
-        { name: '🏠 Local (stdio) - Traditional subprocess', value: 'stdio' },
-        { name: '🌐 Remote (HTTP) - Network accessible', value: 'http' }
-      ]
-    }]);
-    transportMode = mode;
-  }
-  
   // Check and setup server
   const spinner = ora('Setting up server...').start();
   
@@ -300,146 +263,33 @@ const quickLaunch = async (serverName) => {
     return;
   }
   
-  // Handle HTTP mode
-  if (transportMode === 'http') {
-    // Select transport type
-    let httpTransport = 'http';
-    if (server.transportModes.includes('sse')) {
-      const { transport } = await inquirer.prompt([{
-        type: 'list',
-        name: 'transport',
-        message: 'Select HTTP transport type:',
-        choices: [
-          { name: 'StreamableHTTP (recommended)', value: 'http' },
-          { name: 'SSE (Server-Sent Events)', value: 'sse' }
-        ]
-      }]);
-      httpTransport = transport;
-    }
+  // Generate config
+  const configSpinner = ora('Generating Claude Desktop config...').start();
+  try {
+    const { config, configPath } = await manager.generateConfig(serverName, envVars);
+    configSpinner.succeed(`Config saved to ${configPath}`);
     
-    // Find available port
-    const availablePort = await processManager.findAvailablePort(
-      server.httpConfig?.defaultPort || 3000
-    );
-    
-    const { port } = await inquirer.prompt([{
-      type: 'number',
-      name: 'port',
-      message: 'Port to run server on:',
-      default: availablePort
-    }]);
-    
-    // Ask about authentication
-    const { enableAuth } = await inquirer.prompt([{
+    // Ask to copy to Claude Desktop
+    const { copyConfig } = await inquirer.prompt([{
       type: 'confirm',
-      name: 'enableAuth',
-      message: 'Enable API key authentication?',
-      default: false
+      name: 'copyConfig',
+      message: 'Copy configuration to Claude Desktop?',
+      default: true
     }]);
     
-    let authToken = null;
-    if (enableAuth) {
-      const authManager = (await import('./auth-middleware.js')).default;
-      await authManager.loadAuthConfig();
-      
-      const { authChoice } = await inquirer.prompt([{
-        type: 'list',
-        name: 'authChoice',
-        message: 'Authentication setup:',
-        choices: [
-          { name: 'Generate new API key', value: 'new' },
-          { name: 'Use existing key', value: 'existing' }
-        ]
-      }]);
-      
-      if (authChoice === 'new') {
-        const { keyName } = await inquirer.prompt([{
-          type: 'input',
-          name: 'keyName',
-          message: 'Name for this API key:',
-          default: `${serverName}-key`
-        }]);
-        
-        authToken = authManager.generateApiKey(keyName);
-        console.log(chalk.green('\n✅ API Key generated!'));
-        console.log(chalk.yellow('⚠️  Save this token:'));
-        console.log(chalk.cyan(authToken));
-      } else {
-        const tokens = authManager.listTokens();
-        if (tokens.global.length === 0) {
-          console.log(chalk.yellow('No existing tokens found, generating new one...'));
-          authToken = authManager.generateApiKey(`${serverName}-key`);
-          console.log(chalk.green('✅ New API Key:'));
-          console.log(chalk.cyan(authToken));
-        } else {
-          console.log(chalk.yellow('Please use one of your existing tokens'));
-          console.log('Available tokens:');
-          tokens.global.forEach(t => {
-            console.log(`  ${t.name}: ${t.tokenPreview}`);
-          });
-        }
+    if (copyConfig) {
+      const copySpinner = ora('Copying to Claude Desktop...').start();
+      try {
+        const { path } = await manager.copyToClaudeDesktop(serverName, config);
+        copySpinner.succeed(`Config copied to ${path}`);
+        console.log(chalk.green('\n✅ Server configured successfully!'));
+        console.log(chalk.yellow('⚠️  Restart Claude Desktop to apply changes'));
+      } catch (error) {
+        copySpinner.fail(`Failed to copy config: ${error.message}`);
       }
     }
-    
-    // Start HTTP server
-    const startSpinner = ora('Starting HTTP server...').start();
-    try {
-      await processManager.startHttpServer(serverName, server, {
-        port,
-        transport: httpTransport,
-        envVars,
-        authEnabled: enableAuth,
-        authToken
-      });
-      startSpinner.succeed(`Server running on http://localhost:${port}`);
-      
-      // Generate HTTP config
-      const httpConfig = {
-        mcpServers: {
-          [serverName]: {
-            url: `http://localhost:${port}${server.httpConfig?.endpoint || '/mcp'}`,
-            transport: httpTransport === 'sse' ? 'sse' : 'streamableHttp'
-          }
-        }
-      };
-      
-      console.log(chalk.green('\n✅ HTTP Server started successfully!'));
-      console.log(chalk.cyan(`Connect via: http://localhost:${port}${server.httpConfig?.endpoint || '/mcp'}`));
-      console.log(chalk.yellow('\nClaude Desktop config:'));
-      console.log(JSON.stringify(httpConfig, null, 2));
-      
-    } catch (error) {
-      startSpinner.fail(`Failed to start HTTP server: ${error.message}`);
-    }
-  } else {
-    // Original stdio mode
-    const configSpinner = ora('Generating Claude Desktop config...').start();
-    try {
-      const { config, configPath } = await manager.generateConfig(serverName, envVars);
-      configSpinner.succeed(`Config saved to ${configPath}`);
-      
-      // Ask to copy to Claude Desktop
-      const { copyConfig } = await inquirer.prompt([{
-        type: 'confirm',
-        name: 'copyConfig',
-        message: 'Copy configuration to Claude Desktop?',
-        default: true
-      }]);
-      
-      if (copyConfig) {
-        const copySpinner = ora('Copying to Claude Desktop...').start();
-        try {
-          const { path } = await manager.copyToClaudeDesktop(serverName, config);
-          copySpinner.succeed(`Config copied to ${path}`);
-          console.log(chalk.green('\n✅ Server configured successfully!'));
-          console.log(chalk.yellow('⚠️  Restart Claude Desktop to apply changes'));
-        } catch (error) {
-          copySpinner.fail(`Failed to copy config: ${error.message}`);
-        }
-      }
-    } catch (error) {
-      configSpinner.fail(`Config generation failed: ${error.message}`);
-    }
+  } catch (error) {
+    configSpinner.fail(`Config generation failed: ${error.message}`);
   }
 };
 
@@ -635,13 +485,6 @@ const interactiveMenu = async () => {
       { name: '🔍 View Claude Desktop Servers', value: 'view-claude' },
       { name: '🗑️ Manage Claude Desktop Servers', value: 'manage-claude' },
       { name: '🔬 Debug Server with Inspector', value: 'inspect' },
-      new inquirer.Separator('--- HTTP Server Management ---'),
-      { name: '🖥️ Monitor Running Servers', value: 'monitor' },
-      { name: '🛑 Stop HTTP Server', value: 'stop-http' },
-      { name: '🔄 Restart HTTP Server', value: 'restart-http' },
-      { name: '📊 View Server Logs', value: 'view-logs' },
-      { name: '🔑 Manage Authentication', value: 'auth' },
-      new inquirer.Separator(),
       { name: '❌ Exit', value: 'exit' }
     ]
   }]);
@@ -687,137 +530,6 @@ const interactiveMenu = async () => {
       })
     }]);
     await inspectServer(selectedServer);
-    return interactiveMenu();
-  }
-  
-  // Handle HTTP Server Management
-  if (action === 'monitor') {
-    const { monitorMode } = await inquirer.prompt([{
-      type: 'list',
-      name: 'monitorMode',
-      message: 'Select monitor mode:',
-      choices: [
-        { name: '📊 Simple View - Quick status overview', value: 'simple' },
-        { name: '🖥️  Interactive Dashboard - Live monitoring (experimental)', value: 'interactive' },
-        { name: '⬅️  Back to menu', value: 'back' }
-      ]
-    }]);
-    
-    if (monitorMode === 'back') {
-      return interactiveMenu();
-    }
-    
-    if (monitorMode === 'interactive') {
-      console.log(chalk.yellow('\n⚠️  Interactive mode requires blessed and blessed-contrib packages'));
-      console.log(chalk.gray('Installing if needed...'));
-      
-      // Try to start interactive monitor
-      try {
-        const { MonitorService } = await import('./monitor.js');
-        const monitor = new MonitorService();
-        await monitor.start();
-      } catch (error) {
-        console.error(chalk.red('Failed to start interactive monitor:'), error.message);
-        console.log(chalk.yellow('Falling back to simple view...'));
-        
-        // Fall back to simple view
-        const { displayMonitor } = await import('./monitor.js');
-        await displayMonitor();
-      }
-    } else {
-      // Simple view
-      const { displayMonitor } = await import('./monitor.js');
-      await displayMonitor();
-    }
-    
-    return interactiveMenu();
-  }
-  
-  if (action === 'stop-http') {
-    const runningServers = processManager.getRunningServers();
-    if (runningServers.length === 0) {
-      console.log(chalk.gray('No HTTP servers currently running'));
-      return interactiveMenu();
-    }
-    
-    const { serverToStop } = await inquirer.prompt([{
-      type: 'list',
-      name: 'serverToStop',
-      message: 'Select server to stop:',
-      choices: runningServers.map(s => ({
-        name: `${s.name} (port ${s.port})`,
-        value: s.name
-      }))
-    }]);
-    
-    const stopSpinner = ora('Stopping server...').start();
-    try {
-      await processManager.stopHttpServer(serverToStop);
-      stopSpinner.succeed('Server stopped');
-    } catch (error) {
-      stopSpinner.fail(`Failed to stop server: ${error.message}`);
-    }
-    return interactiveMenu();
-  }
-  
-  if (action === 'restart-http') {
-    const runningServers = processManager.getRunningServers();
-    if (runningServers.length === 0) {
-      console.log(chalk.gray('No HTTP servers currently running'));
-      return interactiveMenu();
-    }
-    
-    const { serverToRestart } = await inquirer.prompt([{
-      type: 'list',
-      name: 'serverToRestart',
-      message: 'Select server to restart:',
-      choices: runningServers.map(s => ({
-        name: `${s.name} (port ${s.port})`,
-        value: s.name
-      }))
-    }]);
-    
-    const restartSpinner = ora('Restarting server...').start();
-    try {
-      const server = manager.getServer(serverToRestart);
-      await processManager.restartServer(serverToRestart, server, {});
-      restartSpinner.succeed('Server restarted');
-    } catch (error) {
-      restartSpinner.fail(`Failed to restart server: ${error.message}`);
-    }
-    return interactiveMenu();
-  }
-  
-  if (action === 'view-logs') {
-    const runningServers = processManager.getRunningServers();
-    if (runningServers.length === 0) {
-      console.log(chalk.gray('No HTTP servers currently running'));
-      return interactiveMenu();
-    }
-    
-    const { serverLogs } = await inquirer.prompt([{
-      type: 'list',
-      name: 'serverLogs',
-      message: 'Select server to view logs:',
-      choices: runningServers.map(s => ({
-        name: `${s.name} (port ${s.port})`,
-        value: s.name
-      }))
-    }]);
-    
-    console.log(chalk.bold(`\n📊 Logs for ${serverLogs}:\n`));
-    try {
-      const logs = await processManager.getServerLogs(serverLogs, 50);
-      console.log(logs);
-    } catch (error) {
-      console.error(chalk.red(`Failed to get logs: ${error.message}`));
-    }
-    return interactiveMenu();
-  }
-  
-  if (action === 'auth') {
-    const { manageAuth } = await import('./auth-middleware.js');
-    await manageAuth(inquirer);
     return interactiveMenu();
   }
   
